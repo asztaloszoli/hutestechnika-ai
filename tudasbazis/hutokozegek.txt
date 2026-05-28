@@ -1,0 +1,146 @@
+# Hűtőközegek (Refrigerants) - Összefoglaló
+
+## R32 (Difluorometán)
+- Kémiai képlet: CH2F2
+- GWP (Global Warming Potential): 675
+- ODP (Ozone Depletion Potential): 0
+- Forráspont: -51,7°C
+- Biztonsági osztály: A2L (enyhe gyúlékonyság)
+- Kritikus hőmérséklet: 78,1°C
+- Kritikus nyomás: 57,8 bar
+- Felhasználás: Főleg split klímákban, R410A kiváltására
+- Megjegyzés: Kisebb töltet szükséges mint R410A-hoz, jobb energiahatékonyság
+
+## R410A (R32/R125 keverék 50/50)
+- GWP: 2088
+- ODP: 0
+- Forráspont: -51,4°C
+- Biztonsági osztály: A1 (nem gyúlékony)
+- Kritikus hőmérséklet: 72,1°C
+- Felhasználás: Split klímák, multi-split rendszerek
+- Kivezetés: 2025-től fokozatosan kivonják az EU-ban (F-gáz rendelet)
+- Megjegyzés: Zeotróp keverék, csak folyadékként tölthető
+
+## R404A (R125/R143a/R134a keverék)
+- GWP: 3922 (nagyon magas!)
+- ODP: 0
+- Forráspont: -46,2°C
+- Biztonsági osztály: A1
+- Felhasználás: Kereskedelmi hűtés, mélyhűtők, szupermarketek
+- Kivezetés: Már nagyrészt kivonták, 2020 után újratöltés tiltott új berendezésekbe
+- Megjegyzés: Zeotróp keverék, magas GWP miatt F-gáz szabályozás erősen korlátozza
+
+## R134a (Tetrafluoretán)
+- Kémiai képlet: CH2FCF3
+- GWP: 1430
+- ODP: 0
+- Forráspont: -26,1°C
+- Biztonsági osztály: A1
+- Kritikus hőmérséklet: 101,1°C
+- Felhasználás: Autó légkondicionálók (kivezetés alatt), hűtőszekrények, közepes hőmérsékletű kereskedelmi hűtés
+- Kivezetés: Autóipari alkalmazásban R1234yf váltja fel
+
+## R1234yf (2,3,3,3-tetrafluoropropilén)
+- GWP: 4 (rendkívül alacsony!)
+- ODP: 0
+- Forráspont: -29,4°C
+- Biztonsági osztály: A2L (enyhe gyúlékonyság)
+- Felhasználás: Autó légkondicionálók (R134a utódja), egyes hőszivattyúk
+- Megjegyzés: Drágább mint R134a, de környezetbarát
+
+## R1234ze (transz-1,3,3,3-tetrafluoropropilén)
+- GWP: 7
+- ODP: 0
+- Forráspont: -18,9°C
+- Biztonsági osztály: A2L
+- Felhasználás: Centrifugális chillerek, közepes hőmérsékletű alkalmazások
+
+## R22 (Klór-difluormetán) - KIVEZETETT
+- GWP: 1810
+- ODP: 0,055 (ózonkárosító!)
+- Forráspont: -40,8°C
+- Biztonsági osztály: A1
+- Felhasználás: Régi split klímák, ipari hűtés (már nem gyártják)
+- Kivezetés: EU-ban 2010 óta tilos új berendezésbe tölteni, 2015 óta újratöltés is tiltott
+
+## R290 (Propán)
+- GWP: 3
+- ODP: 0
+- Forráspont: -42,1°C
+- Biztonsági osztály: A3 (erősen gyúlékony!)
+- Felhasználás: Háztartási hűtőszekrények, kis kereskedelmi hűtők, hőszivattyúk
+- Töltet korlát: Max 150g egy körben (biztonsági előírás)
+- Megjegyzés: Kiváló termodinamikai tulajdonságok, alacsony GWP, de tűzveszélyes
+
+## R600a (Izobután)
+- GWP: 3
+- ODP: 0
+- Forráspont: -11,7°C
+- Biztonsági osztály: A3 (erősen gyúlékony!)
+- Felhasználás: Háztartási hűtőszekrények és fagyasztók
+- Megjegyzés: Legelterjedtebb háztartási hűtőközeg Európában
+
+## R744 (CO2 / Szén-dioxid)
+- GWP: 1
+- ODP: 0
+- Forráspont: -78,4°C (szublimál)
+- Kritikus hőmérséklet: 31,1°C (alacsony - transzkritikus üzem szükséges)
+- Kritikus nyomás: 73,8 bar
+- Biztonsági osztály: A1
+- Felhasználás: Szupermarketek, ipari hűtés, hőszivattyúk, autóipari AC
+- Nyomás: Nagyon magas (100-130 bar transzkritikus üzemben!)
+- Megjegyzés: Természetes hűtőközeg, jövő egyik megoldása
+
+## R717 (Ammónia / NH3)
+- GWP: 0
+- ODP: 0
+- Forráspont: -33,3°C
+- Biztonsági osztály: B2L (mérgező, enyhe gyúlékonyság)
+- Felhasználás: Ipari hűtés, élelmiszeripari hűtőházak, jégpályák
+- Előny: Kiváló termodinamikai hatásfok, olcsó
+- Hátrány: Mérgező (150 ppm felett veszélyes), agresszív a rézre
+
+## R507 (R125/R143a keverék 50/50)
+- GWP: 3985
+- ODP: 0
+- Forráspont: -46,7°C
+- Biztonsági osztály: A1
+- Felhasználás: Mélyhűtés, kereskedelmi hűtés (R502 és R404A helyett)
+- Megjegyzés: Azeotróp keverék (mint egy tiszta anyag viselkedik)
+
+## R448A és R449A (HFO keverékek)
+- GWP: ~1300-1400
+- Felhasználás: R404A és R507 visszaszerelési (retrofit) alternatívái
+- Megjegyzés: Csökkentett GWP, visszaszerelhetők meglévő R404A rendszerekbe
+
+---
+
+# Biztonsági osztályok (ASHRAE 34 szabvány)
+
+## Toxicitás
+- **A osztály**: Alacsony toxicitás (nem toxikus normál koncentrációban)
+- **B osztály**: Magasabb toxicitás
+
+## Gyúlékonyság
+- **1**: Nem gyúlékony (pl. R410A, R134a)
+- **2L**: Enyhe gyúlékonyság, lassú lángterjdés (pl. R32, R1234yf)
+- **2**: Gyúlékony (pl. R152a)
+- **3**: Erősen gyúlékony (pl. R290 propán, R600a izobután)
+
+---
+
+# F-gáz rendelet (EU 517/2014/EU)
+
+## Fő pontok
+- 2015-től fokozatosan csökkentik a magas GWP-jű F-gázok piaci forgalmazását
+- 2020: GWP>2500 gázok tilalma sztatikus hűtőberendezésekben (kivéve -50°C alatti)
+- 2022: GWP>150 tilalma háztartási hűtőkben
+- 2025: GWP>750 tilalma egyes split klímákban
+- 2030: GWP>150 tilalma keresk. hűtőkben
+
+## F-gáz kezelési engedély
+Magyarországon: Magyar Kereskedelmi és Iparkamara által kiadott igazolás szükséges
+- I. kategória: 3 kg-ig
+- II. kategória: 3-30 kg
+- III. kategória: 30 kg felett
+- IV. kategória: visszanyerő berendezés kezelése

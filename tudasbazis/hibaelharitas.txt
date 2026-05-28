@@ -1,0 +1,155 @@
+# Hűtéstechnikai hibaelhárítás - Leggyakoribb problémák
+
+## 1. A kompresszor nem indul
+
+### Lehetséges okok és megoldások:
+- **Feszültséghiány**: Ellenőrizd a tápfeszültséget, biztosítékot, megszakítót
+- **Magas nyomás kapcsoló kioldott**: Nyomás magas, keressd a hűtővíz vagy levegő hűtés problémáját
+- **Alacsony nyomás kapcsoló kioldott**: Hűtőközeg szivárgás, szűkület a rendszerben
+- **Termikus védelem kioldott**: Kompresszor túlmelegedett - hagyd lehűlni, vizsgáld az okát
+- **Vezérlési hiba**: Ellenőrizd a vezérlő panelt, hibajelzéseket
+- **Meghibásodott kondenzátor**: Induló kondenzátor ellenállásának mérése
+- **Mechanikai zárlat**: Kompresszor beragadt - csere szükséges
+
+## 2. Nem elegendő hűtési teljesítmény
+
+### Lehetséges okok:
+- **Alacsony hűtőközeg töltés**: Mérj szívónyomást és kondenzációs nyomást
+  - R410A: szívó ~8-10 bar, kondenz. ~26-28 bar (normál üzemnél)
+  - R32: szívó ~9-11 bar, kondenz. ~28-30 bar
+- **Eltömődött szűrő-szárítóegység**: Nyomáskülönbség a szárítón > 0,3 bar → csere
+- **Eltömődött expanziós szelep**: Jég képződés a szelepen, nyomáskülönbség
+- **Piszkos kondenzátor**: Tisztítás szükséges
+- **Piszkos párologtató**: Jégképződés, légáramlás akadályozott
+- **Ventilátorprobléma**: Lassabb forgás, meghibásodott
+- **Belső szivárgás a kompresszorban**: Kompresszor kopott - csere
+
+## 3. Magas kondenzációs nyomás
+
+### Okok:
+- Piszkos vagy eltömődött kondenzátor → tisztítás
+- Nem megfelelő légáramlás a kondenzátoron → ellenőrizd a ventilátort
+- Túl magas környezeti hőmérséklet → árnyékolás, jobb szellőzés
+- Túltöltött rendszer → hűtőközeg elvétele szükséges
+- Levegő vagy nem kondenzálódó gáz a rendszerben → ürítés, újratöltés
+- Magas hűtővíz hőmérséklet (vízhűtésnél)
+
+### Mért értékek (R410A, 35°C külső hőmérsékleten):
+- Normál kondenzációs nyomás: 24-28 bar
+- Riasztási határ: 30-32 bar
+- Leállítási határ: 34-36 bar
+
+## 4. Alacsony szívónyomás (szívóoldali problémák)
+
+### Okok:
+- Hűtőközeg szivárgás → szivárgásvizsgálat
+- Eltömődött expanziós szelep → ellenőrzés, tisztítás, csere
+- Befagyott expanziós szelep (nedvesség) → szárítóegység csere, ürítés
+- Piszkos párologtató szűrő
+- Rossz hőmérő izzó pozíció (termosztatos expanziós szelepeknél)
+- Túl kis töltés
+- Párologtató befagyott → leolvasztás szükséges
+
+## 5. Kompresszor folyamatosan fut (nem kapcsol ki)
+
+### Okok:
+- Nem elegendő hűtési teljesítmény (lásd 2. pont)
+- Termosztát hibás vagy rossz beállítás
+- Hőteher túl nagy (rosszul méretezett rendszer)
+- Szivárgó ajtótömítés (hűtőkamránál)
+- Sűrűn nyitott ajtók
+
+## 6. Jégképződés a párologtatón
+
+### Okok és megoldások:
+- **Alacsony párologtatási hőmérséklet**: Expanziós szelep beállítás
+- **Rossz leolvasztási ciklus**: Leolvasztás időzítő, heater ellenőrzés
+- **Légáramlás problémák**: Ventilátor, jéggel tömött légcsatorna
+- **Ajtótömítés szivárog**: Pótlólagos nedvesség bekerül
+- **Alacsony hűtőközeg töltés**: Szuperhűlés megnő, jég képződik
+
+### Leolvasztás módszerei:
+1. Elektromos fűtőbetétes leolvasztás (leggyakoribb)
+2. Forró gázos leolvasztás (ipari rendszereknél)
+3. Természetes leolvasztás (kikapcsolt kompresszorral)
+4. Vizes leolvasztás
+
+## 7. Zajok és vibrációk
+
+### Zaj típusonként:
+- **Kopogás induláskor**: Folyadék a kompresszorban (liquid slugging) - expanziós szelep ellenőrzés, folyadékelválasztó
+- **Süvítés, sivítás**: Szívónyomás nagyon alacsony, kavitáció
+- **Kopogás üzem közben**: Kompresszor mechanikai kopás → csere
+- **Vibráció**: Lazult tartók, rugók, rezgéscsillapítók
+
+## 8. Hűtőközeg szivárgás keresése
+
+### Módszerek:
+1. **Elektromos szivárgásdetektor**: Legjobb érzékenység, HFC/HFO-kra
+2. **UV festék módszer**: Festék bevitele, UV lámpával keresés
+3. **Szappanos víz**: Gyors, egyszerű, de csak nagyobb szivárgásoknál
+4. **Nitrogénes nyomáspróba**: 40-45 bar nitrogénnel, szappanvíz
+
+### Tipikus szivárgási helyek:
+- Szerelvény kötések (Schrader szelepek)
+- Forrasztott kötések (különösen vibráló részeken)
+- Kompresszor tengelytömítés
+- Expanziós szelep kötések
+- Kondenzátor és párologtató anyaghibák
+
+## 9. Szuperhűlés és túlhevítés mérése
+
+### Túlhevítés (Superheat) - szívóoldalon:
+- **Definíció**: Gőz hőmérséklete - forráspont a szívónyomáson
+- **Normál érték**: 5-10°C (termosztatos exp. szelepeknél)
+- **Túl magas** (>15°C): Alacsony töltés, eltömődött szelep
+- **Túl alacsony** (<3°C): Veszélyes, folyadék visszafolyhat a kompresszorba
+
+### Szuperhűlés (Subcooling) - folyadékvezetéken:
+- **Definíció**: Kondenzációs hőmérséklet - folyadék tényleges hőmérséklete
+- **Normál érték**: 3-8°C
+- **Túl alacsony** (<2°C): Alacsony töltés, folyadékvezeték szűkület
+- **Túl magas** (>10°C): Túltöltés
+
+## 10. Olajvisszavezetési problémák
+
+### Tünetek:
+- Kompresszor olajhiány miatti meghibásodás
+- Buborék az üvegszemben folyadékvezetéken
+- Kompresszor nem tud elegendő nyomást felépíteni
+
+### Okok:
+- Túl alacsony szívósebességű csövezés → olajtárolók képződnek
+- Nem megfelelő olajvisszavezető hurkok
+- Nem kompatibilis olaj a hűtőközeghez
+
+---
+
+# Mérési és karbantartási útmutató
+
+## Rendszeres karbantartás (éves)
+1. Hűtőközeg töltés ellenőrzése (nyomásmérés)
+2. Szivárgásvizsgálat
+3. Kondenzátor tisztítása
+4. Elektromos kötések ellenőrzése és meghúzása
+5. Kompresszor olajszint ellenőrzése (ha van olajüveg)
+6. Szárítóegység állapot ellenőrzése
+7. Expanziós szelep beállítás ellenőrzése
+8. Leolvasztás rendszer ellenőrzése
+9. Vezérlő és biztonsági kapcsolók tesztelése
+10. Teljesítménymérés (COP számítás)
+
+## Nyomásmérés - manométer csatlakoztatás
+1. Zárd el a Schrader szelepeket
+2. Csatlakoztasd a manométert (piros=magas, kék=alacsony, sárga=vákuum/töltés)
+3. Nyisd meg óvatosan a szelepeket
+4. Olvasd le a nyomásokat
+5. Mérés után zárd le a szelepeket, válaszd le a tömlőket
+
+## COP (Hatékonysági tényező) számítás
+- COP = Hűtési teljesítmény / Elektromos teljesítményfelvétel
+- Tipikus értékek:
+  - Split klíma: COP 3,0-5,0
+  - Kereskedelmi hűtő (+5°C): COP 2,0-3,0
+  - Mélyhűtő (-20°C): COP 1,0-1,8
+  - Ipari ammóniás: COP 3,5-5,0

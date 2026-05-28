@@ -1,0 +1,63 @@
+Tárgy: Hűtéstechnikai AI Asszisztens – indítási útmutató
+
+Szia!
+
+Küldöm a Hűtéstechnikai AI Asszisztenst tesztelésre.
+Csak egy dolgot kell beállítanod: egy ingyenes Google API kulcsot.
+Az egész 5 percet vesz igénybe.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. LÉPÉS – Google Gemini API kulcs megszerzése (INGYENES)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Nyisd meg ezt a linket a böngészőben:
+   https://aistudio.google.com/apikey
+
+2. Jelentkezz be a Google fiókoddal (gmail is megfelel).
+
+3. Kattints a kék "Create API key" gombra.
+
+4. Válaszd: "Create API key in new project"
+
+5. Megjelenik egy hosszú kód, például:
+   AIzaSyXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+6. Másold ki ezt a kódot! (Ctrl+A, majd Ctrl+C)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2. LÉPÉS – Az alkalmazás elindítása
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Nyisd meg a mellékelt "index.html" fájlt
+   (dupla kattintás – megnyílik a böngészőben)
+
+   VAGY nyisd meg ezt a linket:
+   https://asztaloszoli.github.io/hutestechnika-ai/
+
+2. Kattints alul a "⚙️ Beállítások" gombra.
+
+3. Az "API kulcs" mezőbe illeszd be a kimásolt kódot (Ctrl+V).
+
+4. Kattints a "Mentés" gombra.
+
+5. Kattints vissza a "💬 Chat" gombra.
+
+6. Kész! Kérdezhetsz magyarul, például:
+   "Miért magas a kondenzációs nyomás?"
+   "R410A hűtőközeg tulajdonságai"
+   "Kompresszor nem indul, mi lehet az ok?"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FONTOS TUDNIVALÓK
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+- Az API kulcsot csak egyszer kell beírni, megjegyzi a böngésző.
+- A használat INGYENES (napi 500 kérdésig).
+- Az API kulcsot ne add ki senkinek – olyan mint egy jelszó.
+- Telefonra is telepíthető: Chrome böngészőben nyisd meg a linket,
+  majd a három pontnál (⋮) válaszd: "Hozzáadás a kezdőképernyőhöz"
+
+Ha bármilyen kérdésed van, írj!
+
+Üdv,
+[Aláírás]

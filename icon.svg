@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="80" fill="#0f172a"/>
+  <circle cx="256" cy="220" r="120" fill="none" stroke="#7dd3fc" stroke-width="18"/>
+  <path d="M256 100 L256 140" stroke="#7dd3fc" stroke-width="14" stroke-linecap="round"/>
+  <path d="M256 300 L256 340" stroke="#7dd3fc" stroke-width="14" stroke-linecap="round"/>
+  <path d="M156 220 L196 220" stroke="#7dd3fc" stroke-width="14" stroke-linecap="round"/>
+  <path d="M316 220 L356 220" stroke="#7dd3fc" stroke-width="14" stroke-linecap="round"/>
+  <path d="M185 149 L213 177" stroke="#7dd3fc" stroke-width="14" stroke-linecap="round"/>
+  <path d="M299 263 L327 291" stroke="#7dd3fc" stroke-width="14" stroke-linecap="round"/>
+  <path d="M327 149 L299 177" stroke="#7dd3fc" stroke-width="14" stroke-linecap="round"/>
+  <path d="M213 263 L185 291" stroke="#7dd3fc" stroke-width="14" stroke-linecap="round"/>
+  <text x="256" y="235" text-anchor="middle" font-family="Arial,sans-serif" font-weight="bold" font-size="72" fill="#38bdf8">AI</text>
+  <text x="256" y="430" text-anchor="middle" font-family="Arial,sans-serif" font-weight="bold" font-size="48" fill="#e2e8f0">❄ HŰTÉS</text>
+</svg>

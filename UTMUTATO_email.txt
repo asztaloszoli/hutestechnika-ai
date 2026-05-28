@@ -1,0 +1,343 @@
+﻿# Hűtéstechnikai AI Asszisztens – Telepítési és Használati Útmutató
+
+Kedves Felhasználó!
+
+Az alábbiakban lépésről lépésre leírom, hogyan kell beállítani és használni a Hűtéstechnikai AI Asszisztenst.
+Kérlek, olvasd végig figyelmesen, mielőtt bármit elkezdesz. Minden lépésnél pontos utasítást találsz.
+
+---
+
+## TARTALOMJEGYZÉK
+
+1. Mire lesz szükséged?
+2. Google Gemini API kulcs megszerzése (INGYENES)
+3. Supabase fiók és adatbázis beállítása (INGYENES)
+4. Az alkalmazás első beállítása
+5. Dokumentumok feltöltése a tudásbázisba
+6. Az AI asszisztens használata
+7. Telepítés telefonra (opcionális)
+8. Gyakori kérdések
+
+---
+
+## 1. MIRE LESZ SZÜKSÉGED?
+
+- Egy **számítógép** (Windows, Mac vagy Linux)
+- **Internet kapcsolat**
+- Egy **Google fiók** (gmail.com cím is megfelel)
+- **Python** telepítve a számítógépre (csak a dokumentumfeltöltéshez kell)
+
+Az alkalmazás két fő részből áll:
+- **Főoldal** (`index.html`): itt kérdezhetsz az AI-tól
+- **Admin oldal** (`admin.html`): ide töltöd fel a dokumentumokat
+
+---
+
+## 2. GOOGLE GEMINI API KULCS MEGSZERZÉSE
+
+Ez az AI "motorja". Ingyenes, csak regisztráció kell.
+
+**Lépések:**
+
+1. Nyisd meg a böngészőben: **https://aistudio.google.com/apikey**
+
+2. Ha kéri, jelentkezz be a Google fiókoddal.
+
+3. Kattints a kék **"Create API key"** gombra.
+
+4. A megjelenő ablakban válaszd: **"Create API key in new project"**
+
+5. Megjelenik egy hosszú kód, pl.: `AIzaSyXXXXXXXXXXXXXXXXXXXXXXXXXXXX`
+
+6. **FONTOS: Másold ki és mentsd el** ezt a kódot (pl. Notepad-ba), mert később szükséged lesz rá!
+
+> ⚠️ Ezt a kódot NE add ki senkinek, ez olyan mint egy jelszó!
+
+---
+
+## 3. SUPABASE FIÓK ÉS ADATBÁZIS BEÁLLÍTÁSA
+
+A Supabase tárolja a feltöltött dokumentumokat. Ingyenes.
+
+### 3/A – Regisztráció
+
+1. Nyisd meg: **https://supabase.com**
+
+2. Kattints a **"Start your project"** gombra.
+
+3. Válaszd a **"Sign up with GitHub"** lehetőséget.
+   - Ha nincs GitHub fiókod, kattints a **"Sign up"**-ra és hozz létre egyet (ingyenes).
+   - Vagy válaszd az **"Email"** opciót és regisztrálj email címmel.
+
+4. A regisztráció után automatikusan belépsz a Supabase irányítópultjára.
+
+### 3/B – Új projekt létrehozása
+
+1. Kattints a **"New project"** gombra.
+
+2. Töltsd ki az adatokat:
+   - **Name**: `hutestechnika-ai` (vagy bármilyen név)
+   - **Database Password**: Kattints a **"Generate a password"** gombra, majd **mentsd el ezt a jelszót!**
+   - **Region**: Válaszd a **"Central EU (Frankfurt)"** opciót
+
+3. Kattints a **"Create new project"** gombra.
+
+4. Várd meg amíg a projekt létrejön (kb. 1-2 perc, zöld pipa jelzi ha kész).
+
+### 3/C – Adatbázis séma beállítása
+
+1. A bal oldali menüben kattints az **"SQL Editor"** ikonra (adatbázis ikon).
+
+2. Kattints a **"New query"** gombra.
+
+3. Töröld ki ami van a szövegmezőben, majd másold be az alábbi teljes szöveget:
+
+```sql
+create extension if not exists vector with schema extensions;
+
+create table if not exists documents (
+  id          bigserial primary key,
+  title       text not null,
+  content     text not null,
+  embedding   vector(3072),
+  source      text,
+  chunk_idx   integer default 0,
+  created_at  timestamptz default now()
+);
+
+alter table documents enable row level security;
+
+create policy "Publikus olvasas" on documents
+  for select using (true);
+
+create policy "Publikus iras" on documents
+  for insert with check (true);
+
+create policy "Publikus torles" on documents
+  for delete using (true);
+
+create or replace function match_documents(
+  query_embedding vector(3072),
+  match_threshold float default 0.5,
+  match_count     int   default 5
+)
+returns table (
+  id        bigint,
+  title     text,
+  content   text,
+  source    text,
+  similarity float
+)
+language sql stable as $$
+  select
+    documents.id,
+    documents.title,
+    documents.content,
+    documents.source,
+    1 - (documents.embedding <=> query_embedding) as similarity
+  from documents
+  where 1 - (documents.embedding <=> query_embedding) > match_threshold
+  order by similarity desc
+  limit match_count;
+$$;
+```
+
+4. Kattints a zöld **"Run"** gombra (vagy nyomj Ctrl+Enter).
+
+5. Alul meg kell jelennie: **"Success. No rows returned"** – ez azt jelenti, minden rendben.
+
+### 3/D – API kulcsok másolása
+
+1. A bal oldali menüben kattints a **fogaskerék ikonra** (Settings), majd **"API"**.
+
+2. A **"Project URL"** sorban lévő linket másold ki és mentsd el.
+   - Pl.: `https://abcdefghijkl.supabase.co`
+
+3. Az **"Publishable key"** (vagy "anon public") sorban lévő kódot másold ki és mentsd el.
+   - Hosszú kód, `eyJ...` karakterekkel kezdődik.
+
+> 💡 Most három dolgot kell elmentve tartanod: Gemini API kulcs, Supabase URL, Supabase Publishable key.
+
+---
+
+## 4. AZ ALKALMAZÁS ELSŐ BEÁLLÍTÁSA
+
+### 4/A – Fájlok letöltése
+
+Az alkalmazás fájljait innen töltsd le:
+**https://github.com/asztaloszoli/hutestechnika-ai**
+
+1. Kattints a zöld **"Code"** gombra, majd **"Download ZIP"**.
+2. Csomagold ki a ZIP fájlt egy mappába, pl.: `C:\hutestechnika-ai\`
+
+### 4/B – Admin oldal beállítása
+
+1. Nyisd meg az `admin.html` fájlt a böngészőben.
+   - Kattints duplán a fájlra, vagy húzd be a böngésző ablakába.
+
+2. Az oldal tetején látod a **"⚙️ Beállítások"** részt. Töltsd ki:
+   - **Supabase URL**: illeszd be a 3/D pontban másolt URL-t
+   - **Supabase kulcs**: illeszd be a 3/D pontban másolt Publishable key-t
+   - **Gemini API kulcs**: illeszd be a 2. pontban másolt Gemini kulcsot
+
+3. Kattints a **"💾 Mentés"** gombra.
+
+4. Kattints a **"🔗 Kapcsolat tesztelése"** gombra.
+   - Ha megjelenik: **"✅ Supabase kapcsolat OK"** – minden jól van beállítva!
+   - Ha hibát látsz: ellenőrizd, hogy pontosan másoltad-e be a kulcsokat (nem maradt-e le belőle karakter).
+
+### 4/C – Főoldal beállítása
+
+1. Nyisd meg az `index.html` fájlt a böngészőben.
+
+2. Kattints a **"⚙️ Beállítások"** fülre (alul vagy felül az oldalon).
+
+3. Töltsd ki ugyanazokat az adatokat mint az admin oldalon:
+   - Supabase URL
+   - Supabase kulcs
+   - Gemini API kulcs
+
+4. Kattints a **"Mentés"** gombra.
+
+---
+
+## 5. DOKUMENTUMOK FELTÖLTÉSE A TUDÁSBÁZISBA
+
+Kétféleképpen tölthetsz fel anyagokat:
+
+### A módszer – Admin oldalon keresztül (egyszerűbb, kis fájlokhoz)
+
+1. Nyisd meg az `admin.html` fájlt a böngészőben.
+
+2. A **"📁 Fájl feltöltése"** részben kattints a feltöltési területre, vagy húzd rá a fájlt.
+   - Támogatott formátumok: `.txt`, `.pdf`, `.md`
+
+3. Kattints a **"⬆️ Feltöltés"** gombra.
+
+4. Várd meg amíg a feltöltés befejeződik – látni fogod a haladást.
+
+5. Ha megjelenik a **"✅ Kész"** üzenet, a dokumentum sikeresen feltöltve.
+
+### B módszer – Python scripttel (nagyobb PDF-ekhez, több fájlhoz)
+
+Ez a módszer gyorsabb, ha sok fájlt szeretnél egyszerre feltölteni.
+
+**Python telepítése (ha még nincs):**
+
+1. Menj a **https://python.org/downloads** oldalra.
+2. Kattints a nagy sárga **"Download Python"** gombra.
+3. Futtasd a letöltött telepítőt. **FONTOS: Pipáld be az "Add Python to PATH" opciót!**
+4. Kattints az "Install Now" gombra.
+
+**Script beállítása:**
+
+1. Nyisd meg a `upload_to_supabase.py` fájlt a Notepad-dal.
+   - Jobb klikk a fájlon → "Megnyitás" → "Notepad"
+
+2. A fájl elején keresd meg ezeket a sorokat és töltsd ki:
+```
+SUPABASE_URL = ""   ← ide írd be a Supabase URL-t (idézőjelek közé!)
+SUPABASE_KEY = ""   ← ide írd be a Publishable key-t (idézőjelek közé!)
+GEMINI_KEY   = ""   ← ide írd be a Gemini API kulcsot (idézőjelek közé!)
+```
+
+   Például:
+```
+SUPABASE_URL = "https://abcdefgh.supabase.co"
+SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+GEMINI_KEY   = "AIzaSyXXXXXXXXXXXXXXXXXX"
+```
+
+3. Mentsd el a fájlt (Ctrl+S).
+
+**Script futtatása:**
+
+1. Nyomd meg a **Windows billentyű + R** gombot.
+2. Írd be: `cmd` és nyomj Entert. Megnyílik a fekete ablak (parancssor).
+3. Írd be és nyomj Entert:
+```
+cd C:\hutestechnika-ai
+```
+4. Majd írd be a feltöltendő PDF teljes elérési útját:
+```
+python upload_to_supabase.py "C:\Users\NevED\Downloads\dokumentum.pdf"
+```
+   (A fájl elérési útját a File Explorerban a fájlra jobb klikkelve, "Tulajdonságok" → "Hely" találod meg.)
+
+5. Látni fogod ahogy sorra feltölti a részeket: `Embedding 1/50... ✓`
+
+6. Ha megjelenik: **"✅ Kész!"** – a dokumentum sikeresen feltöltve.
+
+---
+
+## 6. AZ AI ASSZISZTENS HASZNÁLATA
+
+1. Nyisd meg az `index.html` fájlt a böngészőben (vagy menj a GitHub Pages linkre).
+
+2. A **chat mezőbe** írd be a kérdésedet magyarul vagy angolul, pl.:
+   - *"Miért magas a kondenzációs nyomás?"*
+   - *"R410A hűtőközeg tulajdonságai"*
+   - *"Kompresszor nem indul, mi lehet az ok?"*
+
+3. Nyomj Entert vagy kattints a **"Küldés"** gombra.
+
+4. Az AI válaszol, és ha talál releváns információt a feltöltött dokumentumokból, azt is jelzi.
+
+**Mit jelent a 📚 ikon a válasznál?**
+Ez azt jelenti, hogy az AI a feltöltött dokumentumokból is merített információt – tehát a saját anyagaidból válaszolt!
+
+---
+
+## 7. TELEPÍTÉS TELEFONRA (OPCIONÁLIS)
+
+Az alkalmazást telepítheted a telefonod főképernyőjére, mint egy appot.
+
+**Android telefonon:**
+
+1. Nyisd meg a Chrome böngészőt a telefonon.
+2. Menj az alkalmazás weboldalára (GitHub Pages link).
+3. Érintsd meg a jobb felső sarokban lévő **három pontot** (⋮).
+4. Válaszd: **"Hozzáadás a kezdőképernyőhöz"** vagy **"Alkalmazás telepítése"**.
+5. Kattints a **"Hozzáadás"** gombra.
+
+**iPhone-on:**
+
+1. Nyisd meg a Safari böngészőt.
+2. Menj az alkalmazás weboldalára.
+3. Érintsd meg alul a **megosztás ikont** (négyzet felfelé mutató nyíllal).
+4. Görgess le és válaszd: **"Hozzáadás a főképernyőhöz"**.
+5. Kattints a **"Hozzáadás"** gombra.
+
+Az app ezután megjelenik a főképernyőn, és úgy nyitható meg mint egy normál alkalmazás.
+
+---
+
+## 8. GYAKORI KÉRDÉSEK
+
+**K: "Supabase kapcsolat hiba" üzenetet kapok.**
+V: Ellenőrizd, hogy pontosan másoltad-e be az URL-t és a kulcsot. Nem maradhat le egyetlen karakter sem. A kulcs végén ne legyen szóköz.
+
+**K: Az AI nem a dokumentumaimból válaszol.**
+V: Ellenőrizd, hogy a feltöltés sikerült-e (az admin oldalon a "Dokumentumok" listában kell látszania). Ha üres a lista, töltsd fel újra a dokumentumokat.
+
+**K: "Python nem található" hiba a scriptfuttatásnál.**
+V: A Python nincs telepítve, vagy telepítésnél nem pipáltad be az "Add Python to PATH" opciót. Telepítsd újra, és most pipáld be azt az opciót.
+
+**K: Elfelejtettem az API kulcsomat.**
+V: A Gemini kulcsot a https://aistudio.google.com/apikey oldalon tudod megnézni vagy újat generálni. A Supabase kulcsot a Supabase irányítópultján a Settings → API menüpontban találod.
+
+**K: Mennyibe kerül a használat?**
+V: Normál használatnál (néhány száz kérdés naponta) teljesen ingyenes. Mindkét szolgáltatás (Google Gemini és Supabase) ingyenes csomagot kínál, ami bőven elegendő.
+
+**K: Biztonságos? Látja-e más az adataimat?**
+V: A dokumentumok a saját Supabase adatbázisodban tárolódnak, ami a te fiókodhoz tartozik. A Gemini API-n keresztül a kérdések a Google szervereire mennek el, de személyes adatokat ne tölts fel.
+
+---
+
+## SEGÍTSÉG
+
+Ha elakadsz, írj emailt vagy hívj – segítek a beállításban.
+
+---
+
+*Útmutató verzió: 1.0 | Utolsó frissítés: 2026. május*

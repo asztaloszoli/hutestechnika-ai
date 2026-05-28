@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tudásbázis Admin – Hűtéstechnika</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Segoe UI', Arial, sans-serif;
+  background: #0f172a;
+  color: #e2e8f0;
+  min-height: 100vh;
+  padding: 20px;
+}
+.container { max-width: 860px; margin: 0 auto; }
+h1 { color: #7dd3fc; font-size: 20px; margin-bottom: 4px; }
+.subtitle { color: #64748b; font-size: 12px; margin-bottom: 24px; }
+.card {
+  background: #1e293b;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 16px;
+  border: 1px solid #334155;
+}
+.card h2 { color: #7dd3fc; font-size: 14px; margin-bottom: 14px; }
+label { display: block; font-size: 11px; color: #94a3b8; margin-bottom: 4px; margin-top: 10px; }
+label:first-of-type { margin-top: 0; }
+input[type=text], input[type=password], textarea, select {
+  width: 100%;
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  color: #e2e8f0;
+  padding: 8px 10px;
+  font-size: 12px;
+  outline: none;
+  font-family: monospace;
+}
+input:focus, textarea:focus, select:focus { border-color: #0ea5e9; }
+textarea { resize: vertical; min-height: 120px; font-family: inherit; font-size: 13px; }
+.row { display: flex; gap: 10px; flex-wrap: wrap; }
+.row > * { flex: 1; min-width: 200px; }
+.btn {
+  background: #0ea5e9;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 20px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 12px;
+}
+.btn:hover { background: #38bdf8; }
+.btn:disabled { background: #334155; color: #64748b; cursor: default; }
+.btn.secondary {
+  background: #1e3a5f;
+  border: 1px solid #2d5a8e;
+  color: #7dd3fc;
+}
+.btn.secondary:hover { background: #2d5a8e; }
+.btn.danger { background: #7f1d1d; color: #fca5a5; }
+.btn.danger:hover { background: #991b1b; }
+
+/* Drop zone */
+#drop-zone {
+  border: 2px dashed #334155;
+  border-radius: 10px;
+  padding: 30px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-bottom: 12px;
+}
+#drop-zone.drag-over { border-color: #0ea5e9; background: #0c2035; }
+#drop-zone .dz-icon { font-size: 36px; margin-bottom: 8px; }
+#drop-zone .dz-text { color: #94a3b8; font-size: 13px; }
+#drop-zone .dz-sub { color: #475569; font-size: 11px; margin-top: 4px; }
+#file-input { display: none; }
+#file-list { margin-top: 8px; }
+.file-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #0f172a;
+  padding: 6px 10px;
+  border-radius: 6px;
+  margin-bottom: 4px;
+  font-size: 12px;
+}
+.file-item .fi-name { flex: 1; color: #e2e8f0; }
+.file-item .fi-size { color: #64748b; font-size: 11px; }
+.file-item .fi-remove { cursor: pointer; color: #f87171; font-size: 14px; }
+
+/* Log */
+#log {
+  background: #080f1a;
+  border: 1px solid #1e3a5f;
+  border-radius: 8px;
+  padding: 12px;
+  font-family: 'Consolas', monospace;
+  font-size: 11px;
+  color: #94a3b8;
+  max-height: 280px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  margin-top: 14px;
+}
+.log-ok { color: #86efac; }
+.log-err { color: #fca5a5; }
+.log-info { color: #7dd3fc; }
+.log-warn { color: #fcd34d; }
+
+/* Dokumentum lista */
+#doc-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 10px; }
+#doc-table th { background: #0f172a; color: #94a3b8; padding: 6px 8px; text-align: left; border-bottom: 1px solid #334155; }
+#doc-table td { padding: 6px 8px; border-bottom: 1px solid #1e293b; vertical-align: top; }
+#doc-table tr:hover td { background: #1e293b; }
+.doc-title { color: #e2e8f0; }
+.doc-source { color: #64748b; font-size: 10px; }
+.doc-del { cursor: pointer; color: #f87171; }
+
+/* Progress bar */
+.progress-bar {
+  height: 4px;
+  background: #1e293b;
+  border-radius: 2px;
+  margin-top: 8px;
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  background: #0ea5e9;
+  border-radius: 2px;
+  transition: width 0.3s;
+  width: 0%;
+}
+
+/* OCR panel */
+#ocr-preview {
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  padding: 10px;
+  font-size: 12px;
+  color: #94a3b8;
+  max-height: 200px;
+  overflow-y: auto;
+  margin-top: 8px;
+  white-space: pre-wrap;
+  display: none;
+}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>❄️ Tudásbázis Admin</h1>
+  <p class="subtitle">Hűtéstechnikai dokumentumok kezelése – Supabase</p>
+
+  <!-- Kapcsolat beállítások -->
+  <div class="card">
+    <h2>🔑 Kapcsolat beállítások</h2>
+    <div class="row">
+      <div>
+        <label>Supabase projekt URL</label>
+        <input type="text" id="sb-url" placeholder="https://abcdefgh.supabase.co" />
+      </div>
+      <div>
+        <label>Supabase Service Role kulcs (nem az anon!)</label>
+        <input type="password" id="sb-key" placeholder="eyJ..." />
+      </div>
+    </div>
+    <div>
+      <label>Gemini API kulcs (embedding-hez)</label>
+      <input type="password" id="gemini-key" placeholder="AIza..." />
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button class="btn secondary" onclick="saveConfig()">💾 Mentés</button>
+      <button class="btn secondary" onclick="testConnection()">🔌 Kapcsolat tesztelése</button>
+    </div>
+  </div>
+
+  <!-- Dokumentum feltöltés -->
+  <div class="card">
+    <h2>📤 Dokumentum feltöltés</h2>
+
+    <!-- Drop zone -->
+    <div id="drop-zone" onclick="document.getElementById('file-input').click()">
+      <div class="dz-icon">📁</div>
+      <div class="dz-text">Húzd ide a fájlokat, vagy kattints a kiválasztáshoz</div>
+      <div class="dz-sub">.pdf · .txt · .md · Kép (.jpg .png) – OCR-rel</div>
+    </div>
+    <input type="file" id="file-input" multiple accept=".pdf,.txt,.md,.jpg,.jpeg,.png,.webp" onchange="addFiles(this.files)">
+    <div id="file-list"></div>
+
+    <!-- Vagy szöveg direkt -->
+    <details style="margin-top:12px;">
+      <summary style="cursor:pointer;color:#7dd3fc;font-size:12px;">✏️ Szöveg közvetlen beillesztése</summary>
+      <div style="margin-top:8px;">
+        <label>Cím</label>
+        <input type="text" id="manual-title" placeholder="pl. R32 hűtőközeg adatlap" />
+        <label>Tartalom</label>
+        <textarea id="manual-content" placeholder="Illeszd be a szöveget..."></textarea>
+        <button class="btn secondary" onclick="uploadManual()" style="margin-top:8px;">Feltöltés</button>
+      </div>
+    </details>
+
+    <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+    <button class="btn" id="upload-btn" onclick="uploadAll()" style="display:none;">⬆️ Feltöltés indítása</button>
+  </div>
+
+  <!-- OCR eszköz -->
+  <div class="card">
+    <h2>📷 OCR – Szkennelt dokumentum / kép</h2>
+    <p style="font-size:12px;color:#94a3b8;margin-bottom:10px;">
+      Fotózd le a papír kezelési utasítást, és az AI kinyeri a szöveget.
+    </p>
+    <input type="file" id="ocr-input" accept="image/*" onchange="runOcr(this)" style="display:none;">
+    <button class="btn secondary" onclick="document.getElementById('ocr-input').click()">📷 Kép kiválasztása</button>
+    <div id="ocr-preview"></div>
+    <div id="ocr-actions" style="display:none;margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">
+      <input type="text" id="ocr-title" placeholder="Dokumentum cím..." style="flex:1;min-width:200px;" />
+      <button class="btn" onclick="uploadOcrResult()">⬆️ Feltöltés</button>
+    </div>
+  </div>
+
+  <!-- Meglévő dokumentumok -->
+  <div class="card">
+    <h2>📚 Feltöltött dokumentumok</h2>
+    <button class="btn secondary" onclick="loadDocs()">🔄 Frissítés</button>
+    <button class="btn danger" onclick="deleteAll()" style="margin-left:8px;">🗑️ Összes törlése</button>
+    <table id="doc-table">
+      <thead><tr><th>Cím</th><th>Forrás</th><th>Chunk</th><th></th></tr></thead>
+      <tbody id="doc-tbody"><tr><td colspan="4" style="color:#475569;text-align:center;padding:20px;">Kattints a Frissítés gombra</td></tr></tbody>
+    </table>
+  </div>
+
+  <div id="log">Admin panel betöltve. Töltsd ki a kapcsolat beállításokat.\n</div>
+</div>
+
+<script>
+// ===== ÁLLAPOT =====
+let sbUrl = '', sbKey = '', geminiKey = '';
+let selectedFiles = [];
+let ocrText = '';
+
+// ===== INIT =====
+window.onload = function() {
+  sbUrl = localStorage.getItem('admin_sb_url') || '';
+  sbKey = localStorage.getItem('admin_sb_key') || '';
+  geminiKey = localStorage.getItem('admin_gemini_key') || '';
+  document.getElementById('sb-url').value = sbUrl;
+  if (localStorage.getItem('admin_sb_key')) document.getElementById('sb-key').value = '••••••••';
+  else document.getElementById('sb-key').value = sbKey;
+  if (geminiKey) document.getElementById('gemini-key').value = '••••••••';
+
+  // Drag & drop
+  const dz = document.getElementById('drop-zone');
+  dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag-over'); });
+  dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+  dz.addEventListener('drop', e => {
+    e.preventDefault();
+    dz.classList.remove('drag-over');
+    addFiles(e.dataTransfer.files);
+  });
+};
+
+function saveConfig() {
+  const url = document.getElementById('sb-url').value.trim();
+  const key = document.getElementById('sb-key').value.trim();
+  const gkey = document.getElementById('gemini-key').value.trim();
+  if (url) { sbUrl = url; localStorage.setItem('admin_sb_url', url); }
+  if (key && !key.startsWith('•')) { sbKey = key; localStorage.setItem('admin_sb_key', key); }
+  if (gkey && !gkey.startsWith('•')) { geminiKey = gkey; localStorage.setItem('admin_gemini_key', gkey); }
+  log('✓ Beállítások mentve', 'ok');
+}
+
+async function testConnection() {
+  if (!sbUrl || !sbKey) { log('⚠️ Töltsd ki a Supabase beállításokat!', 'warn'); return; }
+  log('Kapcsolat tesztelése...', 'info');
+  try {
+    const resp = await fetch(`${sbUrl}/rest/v1/documents?select=count&limit=1`, {
+      headers: { 'apikey': sbKey, 'Authorization': `Bearer ${sbKey}` }
+    });
+    if (resp.ok) {
+      log('✓ Supabase kapcsolat OK', 'ok');
+      loadDocs();
+    } else {
+      log(`✗ Supabase hiba: ${resp.status} – ${await resp.text()}`, 'err');
+    }
+  } catch(e) { log(`✗ Kapcsolat hiba: ${e.message}`, 'err'); }
+}
+
+// ===== FÁJLOK =====
+function addFiles(files) {
+  for (const f of files) {
+    if (!selectedFiles.find(x => x.name === f.name && x.size === f.size)) {
+      selectedFiles.push(f);
+    }
+  }
+  renderFileList();
+  document.getElementById('upload-btn').style.display = selectedFiles.length > 0 ? 'inline-block' : 'none';
+}
+
+function renderFileList() {
+  const el = document.getElementById('file-list');
+  el.innerHTML = selectedFiles.map((f, i) => `
+    <div class="file-item">
+      <span>${fileIcon(f.name)}</span>
+      <span class="fi-name">${f.name}</span>
+      <span class="fi-size">${(f.size / 1024).toFixed(0)} KB</span>
+      <span class="fi-remove" onclick="removeFile(${i})">✕</span>
+    </div>`).join('');
+}
+
+function fileIcon(name) {
+  if (name.match(/\.pdf$/i)) return '📕';
+  if (name.match(/\.(jpg|jpeg|png|webp)$/i)) return '🖼️';
+  return '📄';
+}
+
+function removeFile(i) {
+  selectedFiles.splice(i, 1);
+  renderFileList();
+  if (selectedFiles.length === 0) document.getElementById('upload-btn').style.display = 'none';
+}
+
+// ===== CHUNK =====
+function chunkText(text, size = 400, overlap = 50) {
+  const words = text.split(/\s+/).filter(w => w);
+  if (words.length <= size) return [text];
+  const chunks = [];
+  let i = 0;
+  while (i < words.length) {
+    chunks.push(words.slice(i, i + size).join(' '));
+    i += size - overlap;
+  }
+  return chunks;
+}
+
+// ===== EMBEDDING =====
+async function embedText(text) {
+  const resp = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key=${geminiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'models/gemini-embedding-001',
+        content: { parts: [{ text }] },
+        taskType: 'RETRIEVAL_DOCUMENT'
+      })
+    }
+  );
+  const data = await resp.json();
+  if (data.error) throw new Error(data.error.message);
+  const vec = data.embedding.values;
+  const n = Math.sqrt(vec.reduce((s, v) => s + v * v, 0));
+  return n > 0 ? vec.map(v => v / n) : vec;
+}
+
+// ===== SUPABASE FELTÖLTÉS =====
+async function insertChunk(title, content, embedding, source, chunkIdx) {
+  const resp = await fetch(`${sbUrl}/rest/v1/documents`, {
+    method: 'POST',
+    headers: {
+      'apikey': sbKey,
+      'Authorization': `Bearer ${sbKey}`,
+      'Content-Type': 'application/json',
+      'Prefer': 'return=minimal'
+    },
+    body: JSON.stringify({ title, content, embedding, source, chunk_idx: chunkIdx })
+  });
+  if (!resp.ok) throw new Error(`${resp.status}: ${await resp.text()}`);
+}
+
+async function processAndUpload(title, content, source) {
+  const chunks = chunkText(content);
+  log(`  📦 ${chunks.length} chunk → embedding + feltöltés...`, 'info');
+  for (let i = 0; i < chunks.length; i++) {
+    const chunkTitle = chunks.length > 1 ? `${title} [${i+1}/${chunks.length}]` : title;
+    try {
+      const emb = await embedText(chunks[i]);
+      await insertChunk(chunkTitle, chunks[i], emb, source, i);
+      log(`  ✓ chunk ${i+1}/${chunks.length}`, 'ok');
+      setProgress(((i + 1) / chunks.length) * 100);
+      await sleep(300);
+    } catch(e) {
+      log(`  ✗ chunk ${i+1} hiba: ${e.message}`, 'err');
+      await sleep(1000);
+    }
+  }
+}
+
+// ===== SZÖVEG KINYERÉS FÁJLBÓL =====
+async function extractText(file) {
+  const ext = file.name.split('.').pop().toLowerCase();
+  if (['jpg', 'jpeg', 'png', 'webp'].includes(ext)) {
+    return await ocrImage(file);
+  }
+  return await file.text();
+}
+
+// ===== OCR – Gemini Vision =====
+async function ocrImage(file) {
+  if (!geminiKey) throw new Error('Gemini API kulcs szükséges az OCR-hez');
+  log(`  📷 OCR: ${file.name}...`, 'info');
+  const b64 = await fileToBase64(file);
+  const mime = file.type || 'image/jpeg';
+  const resp = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          parts: [
+            { text: 'Írd ki pontosan a képen látható szöveget. Ha technikai dokumentum, tartsd meg a struktúrát (táblázatok, listák). Csak a szöveget add vissza, semmi más magyarázat nélkül.' },
+            { inline_data: { mime_type: mime, data: b64 } }
+          ]
+        }]
+      })
+    }
+  );
+  const data = await resp.json();
+  if (data.error) throw new Error(data.error.message);
+  return data.candidates[0].content.parts[0].text;
+}
+
+function fileToBase64(file) {
+  return new Promise((res, rej) => {
+    const reader = new FileReader();
+    reader.onload = e => res(e.target.result.split(',')[1]);
+    reader.onerror = rej;
+    reader.readAsDataURL(file);
+  });
+}
+
+// ===== FELTÖLTÉS INDÍTÁSA =====
+async function uploadAll() {
+  if (!sbUrl || !sbKey) { log('⚠️ Töltsd ki a Supabase beállításokat!', 'warn'); return; }
+  if (!geminiKey) { log('⚠️ Gemini API kulcs szükséges az embedding-hez!', 'warn'); return; }
+  if (selectedFiles.length === 0) return;
+
+  document.getElementById('upload-btn').disabled = true;
+  setProgress(0);
+
+  for (const file of selectedFiles) {
+    log(`\n📄 Feldolgozás: ${file.name}`, 'info');
+    try {
+      const text = await extractText(file);
+      if (!text.trim()) { log('  ⚠️ Üres fájl, kihagyva.', 'warn'); continue; }
+      const title = file.name.replace(/\.[^.]+$/, '');
+      await processAndUpload(title, text, file.name);
+      log(`✅ ${file.name} kész`, 'ok');
+    } catch(e) {
+      log(`✗ ${file.name} hiba: ${e.message}`, 'err');
+    }
+  }
+
+  selectedFiles = [];
+  renderFileList();
+  document.getElementById('upload-btn').style.display = 'none';
+  document.getElementById('upload-btn').disabled = false;
+  setProgress(100);
+  log('\n🎉 Feltöltés befejezve!', 'ok');
+  loadDocs();
+}
+
+async function uploadManual() {
+  const title = document.getElementById('manual-title').value.trim();
+  const content = document.getElementById('manual-content').value.trim();
+  if (!title || !content) { log('⚠️ Cím és tartalom kötelező!', 'warn'); return; }
+  if (!sbUrl || !sbKey || !geminiKey) { log('⚠️ Töltsd ki az összes beállítást!', 'warn'); return; }
+  log(`\n✏️ Manuális feltöltés: "${title}"`, 'info');
+  await processAndUpload(title, content, 'manuális');
+  document.getElementById('manual-title').value = '';
+  document.getElementById('manual-content').value = '';
+  log('✅ Kész', 'ok');
+  loadDocs();
+}
+
+// ===== OCR PANEL =====
+async function runOcr(input) {
+  if (!input.files[0]) return;
+  if (!geminiKey) { log('⚠️ Gemini API kulcs szükséges!', 'warn'); return; }
+  const preview = document.getElementById('ocr-preview');
+  preview.style.display = 'block';
+  preview.textContent = '⏳ OCR feldolgozás...';
+  try {
+    ocrText = await ocrImage(input.files[0]);
+    preview.textContent = ocrText;
+    const titleInput = document.getElementById('ocr-title');
+    titleInput.value = input.files[0].name.replace(/\.[^.]+$/, '');
+    document.getElementById('ocr-actions').style.display = 'flex';
+    log('✓ OCR kész – ellenőrizd a szöveget, majd töltsd fel', 'ok');
+  } catch(e) {
+    preview.textContent = 'OCR hiba: ' + e.message;
+    log('✗ OCR hiba: ' + e.message, 'err');
+  }
+}
+
+async function uploadOcrResult() {
+  const title = document.getElementById('ocr-title').value.trim();
+  if (!title || !ocrText) { log('⚠️ Cím és OCR szöveg szükséges!', 'warn'); return; }
+  if (!sbUrl || !sbKey || !geminiKey) { log('⚠️ Töltsd ki az összes beállítást!', 'warn'); return; }
+  log(`\n📷 OCR feltöltés: "${title}"`, 'info');
+  await processAndUpload(title, ocrText, 'ocr_scan');
+  document.getElementById('ocr-preview').style.display = 'none';
+  document.getElementById('ocr-actions').style.display = 'none';
+  ocrText = '';
+  log('✅ Kész', 'ok');
+  loadDocs();
+}
+
+// ===== DOKUMENTUM LISTA =====
+async function loadDocs() {
+  if (!sbUrl || !sbKey) { log('⚠️ Supabase beállítások hiányoznak', 'warn'); return; }
+  try {
+    const resp = await fetch(
+      `${sbUrl}/rest/v1/documents?select=id,title,source,chunk_idx&order=created_at.desc&limit=200`,
+      { headers: { 'apikey': sbKey, 'Authorization': `Bearer ${sbKey}` } }
+    );
+    const docs = await resp.json();
+    const tbody = document.getElementById('doc-tbody');
+    if (!Array.isArray(docs) || docs.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4" style="color:#475569;text-align:center;padding:20px;">Nincs dokumentum</td></tr>';
+      return;
+    }
+    tbody.innerHTML = docs.map(d => `
+      <tr>
+        <td class="doc-title">${escHtml(d.title)}</td>
+        <td class="doc-source">${escHtml(d.source || '—')}</td>
+        <td style="color:#64748b">${d.chunk_idx ?? 0}</td>
+        <td><span class="doc-del" onclick="deleteDoc(${d.id})" title="Törlés">🗑️</span></td>
+      </tr>`).join('');
+    log(`✓ ${docs.length} dokumentum betöltve`, 'ok');
+  } catch(e) { log(`✗ Lista betöltési hiba: ${e.message}`, 'err'); }
+}
+
+async function deleteDoc(id) {
+  if (!confirm('Törli ezt a chunk-ot?')) return;
+  try {
+    await fetch(`${sbUrl}/rest/v1/documents?id=eq.${id}`, {
+      method: 'DELETE',
+      headers: { 'apikey': sbKey, 'Authorization': `Bearer ${sbKey}` }
+    });
+    log(`✓ #${id} törölve`, 'ok');
+    loadDocs();
+  } catch(e) { log(`✗ Törlési hiba: ${e.message}`, 'err'); }
+}
+
+async function deleteAll() {
+  if (!confirm('Biztosan törlöd AZ ÖSSZES dokumentumot? Ez nem visszavonható!')) return;
+  if (!confirm('Megerősítés: TÖRLÖD AZ ÖSSZES REKORDOT?')) return;
+  try {
+    await fetch(`${sbUrl}/rest/v1/documents?id=gte.0`, {
+      method: 'DELETE',
+      headers: { 'apikey': sbKey, 'Authorization': `Bearer ${sbKey}` }
+    });
+    log('✓ Összes dokumentum törölve', 'ok');
+    loadDocs();
+  } catch(e) { log(`✗ Törlési hiba: ${e.message}`, 'err'); }
+}
+
+// ===== SEGÉDFÜGGVÉNYEK =====
+function log(msg, type = '') {
+  const el = document.getElementById('log');
+  const span = document.createElement('span');
+  span.className = type ? `log-${type}` : '';
+  span.textContent = msg + '\n';
+  el.appendChild(span);
+  el.scrollTop = el.scrollHeight;
+}
+
+function setProgress(pct) {
+  document.getElementById('progress-fill').style.width = pct + '%';
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+function escHtml(s) {
+  return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+</script>
+</body>
+</html>

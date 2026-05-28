@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#1a2744">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Hűtéstechnikai AI Súgó</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Segoe UI', Arial, sans-serif;
+  background: #0f172a;
+  color: #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+}
+#header {
+  background: #1e3a5f;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid #2d5a8e;
+  flex-shrink: 0;
+}
+#header h1 { font-size: 18px; font-weight: 700; color: #7dd3fc; }
+#header span { font-size: 24px; }
+#header .ver { font-size: 12px; color: #64748b; margin-left: auto; }
+#api-bar { display: none; }
+#kb-bar { display: none; }
+#chat-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  -webkit-overflow-scrolling: touch;
+}
+.msg {
+  max-width: 94%;
+  padding: 12px 16px;
+  border-radius: 14px;
+  font-size: 17px;
+  line-height: 1.6;
+  word-wrap: break-word;
+}
+.msg.user {
+  background: #1e3a5f;
+  align-self: flex-end;
+  border-bottom-right-radius: 3px;
+  color: #e2e8f0;
+}
+.msg.ai {
+  background: #1e293b;
+  align-self: flex-start;
+  border-bottom-left-radius: 3px;
+  border-left: 3px solid #0ea5e9;
+}
+.msg.ai code {
+  background: #0f172a;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'Consolas', monospace;
+  font-size: 15px;
+  color: #86efac;
+}
+.msg.ai strong { color: #7dd3fc; }
+.msg.system {
+  background: #0c2a1a;
+  align-self: center;
+  font-size: 15px;
+  color: #86efac;
+  border-radius: 8px;
+  padding: 8px 16px;
+  text-align: center;
+  max-width: 100%;
+}
+.msg.error {
+  background: #2d1515;
+  align-self: center;
+  font-size: 15px;
+  color: #fca5a5;
+  border-radius: 8px;
+  padding: 8px 16px;
+}
+.source-badge {
+  display: inline-block;
+  font-size: 13px;
+  padding: 4px 10px;
+  border-radius: 10px;
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+.source-badge.kb { background: #0c2a1a; color: #86efac; border: 1px solid #166534; }
+.source-badge.general { background: #2a1f0c; color: #fcd34d; border: 1px solid #854d0e; }
+.sources { font-size: 13px; color: #94a3b8; margin-top: 8px; padding-top: 6px; border-top: 1px dashed #334155; }
+.src-item {
+  display: inline-block;
+  background: #0f172a;
+  color: #7dd3fc;
+  padding: 4px 10px;
+  margin: 3px 4px 3px 0;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  border: 1px solid #334155;
+}
+.src-item:hover { background: #1e3a5f; }
+.src-snippet {
+  margin-top: 6px;
+  padding: 8px 10px;
+  background: #080f1a;
+  border-left: 2px solid #0ea5e9;
+  border-radius: 4px;
+  font-size: 14px;
+  color: #94a3b8;
+  max-height: 200px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  display: none;
+}
+#quick-btns {
+  padding: 6px 10px;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 5px;
+  border-top: 1px solid #1e3a5f;
+  flex-shrink: 0;
+  background: #0f172a;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+#quick-btns::-webkit-scrollbar { display: none; }
+.qbtn {
+  background: #1e293b;
+  color: #7dd3fc;
+  border: 1px solid #334155;
+  border-radius: 16px;
+  padding: 8px 16px;
+  font-size: 15px;
+  cursor: pointer;
+  white-space: nowrap;
+  min-height: 44px;
+  flex-shrink: 0;
+}
+.qbtn:hover { background: #1e3a5f; }
+#input-area {
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px;
+  padding-bottom: max(10px, env(safe-area-inset-bottom));
+  border-top: 1px solid #1e3a5f;
+  background: #0f172a;
+  flex-shrink: 0;
+}
+#user-input {
+  flex: 1;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  color: #e2e8f0;
+  padding: 12px 14px;
+  font-size: 17px;
+  outline: none;
+  resize: none;
+  font-family: inherit;
+  max-height: 120px;
+  min-height: 50px;
+  -webkit-appearance: none;
+  appearance: none;
+}
+#user-input:focus { border-color: #0ea5e9; }
+#send-btn {
+  background: #0ea5e9;
+  color: white;
+  border: none;
+  border-radius: 12px;
+  padding: 12px 18px;
+  font-size: 20px;
+  font-weight: 700;
+  cursor: pointer;
+  align-self: flex-end;
+  min-height: 50px;
+  min-width: 56px;
+}
+#send-btn:hover { background: #38bdf8; }
+#send-btn:disabled { background: #334155; color: #64748b; cursor: default; }
+#mic-btn {
+  background: #1e293b;
+  color: #94a3b8;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 22px;
+  cursor: pointer;
+  align-self: flex-end;
+  min-height: 50px;
+  min-width: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+#mic-btn:hover { background: #334155; color: #e2e8f0; }
+#mic-btn.recording {
+  background: #7f1d1d;
+  color: #fca5a5;
+  border-color: #ef4444;
+  animation: pulse 1s infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+.typing { color: #64748b; font-style: italic; font-size: 15px; }
+#chat-container::-webkit-scrollbar { width: 3px; }
+#chat-container::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
+
+/* Beállítások panel */
+#settings-panel {
+  display: none;
+  flex-direction: column;
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  gap: 14px;
+}
+.settings-group { background: #1e293b; border-radius: 10px; padding: 14px; }
+.settings-group h3 { color: #7dd3fc; font-size: 17px; margin-bottom: 12px; }
+.settings-group label { display: block; font-size: 14px; color: #94a3b8; margin-bottom: 6px; }
+.settings-group input {
+  width: 100%;
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  color: #e2e8f0;
+  padding: 12px 14px;
+  font-size: 16px;
+  margin-bottom: 10px;
+  outline: none;
+  font-family: monospace;
+}
+.settings-group input:focus { border-color: #0ea5e9; }
+.settings-group .save-btn {
+  background: #0ea5e9;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 14px 24px;
+  font-size: 16px;
+  cursor: pointer;
+  font-weight: 600;
+  min-height: 50px;
+}
+.settings-note { font-size: 14px; color: #64748b; margin-top: 8px; line-height: 1.6; }
+
+/* Tab bar alul */
+#tab-bar {
+  display: flex;
+  background: #0f172a;
+  border-top: 1px solid #1e3a5f;
+  flex-shrink: 0;
+}
+.tab-btn {
+  flex: 1;
+  padding: 10px 4px;
+  background: none;
+  border: none;
+  color: #475569;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-height: 58px;
+  justify-content: center;
+}
+.tab-btn .tab-icon { font-size: 22px; }
+.tab-btn.active { color: #7dd3fc; }
+.tab-btn.active .tab-icon { filter: none; }
+/* Dinamikus PWA font-scaling - CSS custom property alapú */
+:root { --pwa-scale: 1; }
+body.standalone .msg { font-size: calc(17px * var(--pwa-scale)) !important; line-height: 1.5 !important; padding: calc(12px * var(--pwa-scale)) calc(16px * var(--pwa-scale)) !important; }
+body.standalone .msg.system { font-size: calc(15px * var(--pwa-scale)) !important; }
+body.standalone .msg.error { font-size: calc(15px * var(--pwa-scale)) !important; }
+body.standalone .msg.ai code { font-size: calc(15px * var(--pwa-scale)) !important; }
+body.standalone #user-input { font-size: calc(17px * var(--pwa-scale)) !important; min-height: calc(50px * var(--pwa-scale)) !important; padding: calc(12px * var(--pwa-scale)) calc(14px * var(--pwa-scale)) !important; }
+body.standalone .qbtn { font-size: calc(15px * var(--pwa-scale)) !important; padding: calc(8px * var(--pwa-scale)) calc(16px * var(--pwa-scale)) !important; min-height: calc(44px * var(--pwa-scale)) !important; }
+body.standalone #send-btn { font-size: calc(20px * var(--pwa-scale)) !important; min-height: calc(50px * var(--pwa-scale)) !important; min-width: calc(56px * var(--pwa-scale)) !important; }
+body.standalone #mic-btn { font-size: calc(22px * var(--pwa-scale)) !important; min-height: calc(50px * var(--pwa-scale)) !important; min-width: calc(50px * var(--pwa-scale)) !important; }
+body.standalone #header h1 { font-size: calc(18px * var(--pwa-scale)) !important; }
+body.standalone #header span { font-size: calc(24px * var(--pwa-scale)) !important; }
+body.standalone .tab-btn { font-size: calc(14px * var(--pwa-scale)) !important; min-height: calc(58px * var(--pwa-scale)) !important; }
+body.standalone .tab-btn .tab-icon { font-size: calc(22px * var(--pwa-scale)) !important; }
+body.standalone .settings-group h3 { font-size: calc(17px * var(--pwa-scale)) !important; }
+body.standalone .settings-group label { font-size: calc(14px * var(--pwa-scale)) !important; }
+body.standalone .settings-group input { font-size: calc(16px * var(--pwa-scale)) !important; padding: calc(12px * var(--pwa-scale)) !important; min-height: calc(50px * var(--pwa-scale)) !important; }
+body.standalone .settings-group .save-btn { font-size: calc(16px * var(--pwa-scale)) !important; min-height: calc(50px * var(--pwa-scale)) !important; }
+body.standalone .settings-note { font-size: calc(14px * var(--pwa-scale)) !important; }
+body.standalone .source-badge { font-size: calc(13px * var(--pwa-scale)) !important; }
+body.standalone .sources { font-size: calc(13px * var(--pwa-scale)) !important; }
+body.standalone .src-item { font-size: calc(13px * var(--pwa-scale)) !important; padding: calc(4px * var(--pwa-scale)) calc(10px * var(--pwa-scale)) !important; }
+body.standalone .typing { font-size: calc(15px * var(--pwa-scale)) !important; }
+body.standalone #kb-status-mini { font-size: calc(14px * var(--pwa-scale)) !important; }
+body.standalone .ver { font-size: calc(12px * var(--pwa-scale)) !important; }
+</style>
+</head>
+<body>
+<script>
+// Standalone mód érzékelés + dinamikus font-scaling kompenzáció
+(function() {
+  var isStandalone = window.location.search.includes('standalone') ||
+    window.matchMedia('(display-mode: standalone)').matches ||
+    window.navigator.standalone;
+
+  if (isStandalone) {
+    document.body.classList.add('standalone');
+
+    // A PWA standalone mód nem veszi át a rendszer font-scaling beállítását,
+    // ezért fix szorzót alkalmazunk (a böngésző ezt automatikusan megteszi, a PWA nem).
+    // Alap szorzó: 1.8 (felhasználó felülírhatja localStorage-ból)
+    var savedScale = localStorage.getItem('hutestech_pwa_scale');
+    var scale = savedScale ? parseFloat(savedScale) : 2.3;
+    document.documentElement.style.setProperty('--pwa-scale', scale.toFixed(3));
+  }
+})();
+</script>
+
+<div id="header">
+  <span>❄️</span>
+  <h1>Hűtéstechnikai AI Súgó</h1>
+  <span id="kb-status-mini" style="font-size:14px;color:#86efac;margin-left:auto;">🟢 KB</span>
+  <span class="ver">v1.0</span>
+</div>
+
+<div id="api-bar">
+  <input type="password" id="api-key-input" placeholder="Gemini API kulcs (AIza...)" />
+  <button onclick="saveApiKey()">💾</button>
+  <span id="api-status"></span>
+</div>
+
+<div id="kb-bar">
+  <span style="font-size:10px;color:#64748b;white-space:nowrap;">KB:</span>
+  <input type="text" id="sb-url-mini" placeholder="Supabase URL (https://xxx.supabase.co)" />
+  <span id="kb-status">⚫ nincs KB</span>
+</div>
+
+<!-- CHAT NÉZET -->
+<div id="chat-view" style="display:flex;flex-direction:column;flex:1;overflow:hidden;">
+  <div id="chat-container">
+    <div class="msg system">Üdvözöllek! Kérdezz hűtéstechnikával kapcsolatban. 🔧</div>
+  </div>
+  <div id="quick-btns"></div>
+  <div id="input-area">
+    <textarea id="user-input" placeholder="Kérdezz..." rows="1"
+      onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+    <button id="mic-btn" onclick="toggleMic()" title="Hangbevitel">🎤</button>
+    <button id="send-btn" onclick="sendMessage()">➤</button>
+  </div>
+</div>
+
+<!-- BEÁLLÍTÁSOK NÉZET -->
+<div id="settings-panel">
+  <div class="settings-group">
+    <h3>🤖 Gemini API kulcs</h3>
+    <label>Google AI Studio API kulcs</label>
+    <input type="password" id="settings-api-key" placeholder="AIza..." />
+    <div class="settings-note">Ingyenes: <a href="https://aistudio.google.com/apikey" style="color:#7dd3fc;">aistudio.google.com/apikey</a></div>
+    <br>
+    <button class="save-btn" onclick="saveApiKeyFromSettings()">Mentés</button>
+  </div>
+
+  <div class="settings-group">
+    <h3>🗄️ Supabase tudásbázis</h3>
+    <label>Supabase projekt URL</label>
+    <input type="text" id="settings-sb-url" placeholder="https://abcdefgh.supabase.co" />
+    <label>Supabase anon kulcs</label>
+    <input type="password" id="settings-sb-key" placeholder="eyJ..." />
+    <div class="settings-note">
+      Ha még nincs Supabase projekt, az app Gemini saját tudásából válaszol (tudásbázis nélkül).<br>
+      Az admin oldalon töltheted fel a dokumentumokat: <b>admin.html</b>
+    </div>
+    <br>
+    <button class="save-btn" onclick="saveSupabase()">Mentés</button>
+  </div>
+
+  <div class="settings-group">
+    <h3>ℹ️ Az alkalmazásról</h3>
+    <div class="settings-note" style="font-size:11px;line-height:1.7;">
+      <b>Hűtéstechnikai AI Súgó</b> — PWA alkalmazás<br>
+      Ipari és lakossági hűtéstechnikusoknak<br><br>
+      Modellek: gemini-2.5-flash (chat), gemini-embedding-001 (keresés)<br>
+      Adatbázis: Supabase pgvector<br><br>
+      Az API kulcs és beállítások csak a te eszközödön tárolódnak.
+    </div>
+  </div>
+</div>
+
+<!-- ALSÓ TAB BAR -->
+<div id="tab-bar">
+  <button class="tab-btn active" onclick="switchTab('chat')">
+    <span class="tab-icon">💬</span>
+    Chat
+  </button>
+  <button class="tab-btn" onclick="switchTab('settings')">
+    <span class="tab-icon">⚙️</span>
+    Beállítások
+  </button>
+</div>
+
+<script>
+// ===== RENDSZER PROMPT =====
+const SYSTEM_PROMPT = `Te egy tapasztalt ipari és lakossági hűtéstechnikai szakértő vagy. Segítesz hűtéstechnikusoknak a mindennapi munkájukban.
+
+## TÉMAKÖREID
+- Hűtőközegek: R32, R410A, R134a, R290 (propán), R404A, R407C, R744 (CO₂), R717 (ammónia), R600a (izobután)
+- Kompresszorok: hermetikus, félhermetikus, scroll, schraeder, dugattyús, csigás
+- Hőcserélők: kondenzátorok, párologtatók, lemezcsereberék, léghűtők
+- Hőszivattyúk: levegő-víz, talaj-víz, levegő-levegő, inverter vezérlés
+- Ipari hűtőrendszerek: hűtőkamrák, fagyasztók, ammóniás rendszerek, CO₂ rendszerek
+- Lakossági klíma: split rendszerek, multi-split, VRF/VRV rendszerek
+- Mérési értékek: szuperhűtés, túlhevítés, COP, EER, nyomás-hőmérséklet összefüggések
+- Hibaelhárítás: magas/alacsony nyomás, befagyás, kompresszor hibák, szivárgás
+- Szabályozástechnika: termosztátok, expanziós szelepek (TXV, EEV), presosztátok
+- Jogszabályok: F-gáz rendelet (EU 517/2014), MSZ EN 378, biztonságtechnika, kezelői jogosultság
+
+## VÁLASZADÁSI SZABÁLYOK
+- Mindig MAGYARUL válaszolj
+- Legyél tömör, gyakorlatias, lépésekre bontott
+- Ha nyomásértéket mondasz, add meg a hőmérsékletet is (p-T összefüggés)
+- Ha forrást idézel a tudásbázisból, jelezd: [forrás neve]
+- Ha nem biztos az info, jelezd: "⚠️ Ezt ellenőrizd le, mert..."
+- Biztonsági figyelmeztetéseket MINDIG add meg ha releváns`;
+
+// ===== GYORSGOMBOK =====
+const QUICK_BTNS = [
+  ['❄️ Hűtőközegek', 'Milyen hűtőközegeket használnak ma leggyakrabban és mire valók?'],
+  ['📊 Nyomásértékek', 'Milyen nyomásértékek normálisak R32 hűtőközegnél split klímánál?'],
+  ['🔧 Hibaelhárítás', 'Magas nyomás hiba okai és megoldása split klímánál'],
+  ['🌡️ Szuperhűtés', 'Hogyan mérem és állítom be a szuperhűtést és túlhevítést?'],
+  ['⚖️ F-gáz', 'Mikor kell F-gáz jogosultság és mi a GWP korlát?'],
+  ['🏭 Hűtőkamra', 'Ipari hűtőkamra kompresszor méretezésének szempontjai'],
+];
+
+// ===== ÁLLAPOT =====
+let chatHistory = [];
+let apiKey = localStorage.getItem('hutestech_gemini_key') || '';
+let sbUrl = localStorage.getItem('hutestech_sb_url') || '';
+let sbKey = localStorage.getItem('hutestech_sb_key') || '';
+let lastSearchMethod = 'none';
+
+// ===== INIT =====
+window.onload = function() {
+  if (apiKey) {
+    document.getElementById('api-key-input').value = '••••••••';
+    document.getElementById('api-status').textContent = '✓';
+  }
+  if (sbUrl) {
+    document.getElementById('sb-url-mini').value = sbUrl;
+  }
+  updateKbStatus();
+  renderQuickBtns();
+
+  // Service worker regisztráció
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
+};
+
+function saveApiKey() {
+  const val = document.getElementById('api-key-input').value.trim();
+  if (val && !val.startsWith('•')) {
+    apiKey = val;
+    localStorage.setItem('hutestech_gemini_key', val);
+    document.getElementById('api-key-input').value = '••••••••';
+    document.getElementById('api-status').textContent = '✓';
+  }
+}
+
+function saveApiKeyFromSettings() {
+  const val = document.getElementById('settings-api-key').value.trim();
+  if (val && !val.startsWith('•')) {
+    apiKey = val;
+    localStorage.setItem('hutestech_gemini_key', val);
+    document.getElementById('api-key-input').value = '••••••••';
+    document.getElementById('api-status').textContent = '✓';
+    document.getElementById('settings-api-key').value = '••••••••';
+    showToast('API kulcs mentve ✓');
+  }
+}
+
+function saveSupabase() {
+  const url = document.getElementById('settings-sb-url').value.trim();
+  const key = document.getElementById('settings-sb-key').value.trim();
+  if (url) { sbUrl = url; localStorage.setItem('hutestech_sb_url', url); document.getElementById('sb-url-mini').value = url; }
+  if (key && !key.startsWith('•')) { sbKey = key; localStorage.setItem('hutestech_sb_key', key); document.getElementById('settings-sb-key').value = '••••••••'; }
+  updateKbStatus();
+  showToast('Supabase beállítás mentve ✓');
+}
+
+function updateKbStatus() {
+  const el = document.getElementById('kb-status');
+  const mini = document.getElementById('kb-status-mini');
+  if (sbUrl && sbKey) {
+    el.textContent = '🟢 KB aktív';
+    el.style.color = '#86efac';
+    mini.textContent = '🟢 KB';
+    mini.style.color = '#86efac';
+  } else if (sbUrl) {
+    el.textContent = '🟡 URL OK, kulcs hiányzik';
+    el.style.color = '#fcd34d';
+    mini.textContent = '🟡';
+    mini.style.color = '#fcd34d';
+  } else {
+    el.textContent = '⚫ nincs KB';
+    el.style.color = '#64748b';
+    mini.textContent = '⚫';
+    mini.style.color = '#64748b';
+  }
+}
+
+// URL mini input live frissítés
+document.getElementById('sb-url-mini').addEventListener('change', function() {
+  sbUrl = this.value.trim();
+  if (sbUrl) localStorage.setItem('hutestech_sb_url', sbUrl);
+  updateKbStatus();
+});
+
+// ===== SUPABASE KERESÉS =====
+async function embedQuery(text) {
+  if (!apiKey) throw new Error('Nincs API kulcs');
+  const resp = await fetch(
+    'https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key=' + apiKey,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'models/gemini-embedding-001',
+        content: { parts: [{ text }] },
+        taskType: 'RETRIEVAL_QUERY'
+      })
+    }
+  );
+  const data = await resp.json();
+  if (data.error) throw new Error('Embedding: ' + data.error.message);
+  const vec = data.embedding.values;
+  let n = 0;
+  for (const v of vec) n += v * v;
+  n = Math.sqrt(n);
+  return n > 0 ? vec.map(v => v / n) : vec;
+}
+
+async function searchKnowledgeBase(query) {
+  if (!sbUrl || !sbKey) return { results: [], method: 'none' };
+
+  // Szemantikus keresés (ha van API kulcs)
+  if (apiKey) {
+    try {
+      const embedding = await embedQuery(query);
+      const resp = await fetch(`${sbUrl}/rest/v1/rpc/match_documents`, {
+        method: 'POST',
+        headers: {
+          'apikey': sbKey,
+          'Authorization': `Bearer ${sbKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ query_embedding: embedding, match_threshold: 0.52, match_count: 4 })
+      });
+      const data = await resp.json();
+      if (Array.isArray(data) && data.length > 0) {
+        return {
+          results: data.map(r => ({ name: r.title, content: r.content, score: Math.round((r.similarity || 0) * 100) })),
+          method: 'semantic'
+        };
+      }
+    } catch(e) { console.warn('Semantic search failed:', e); }
+  }
+
+  // Kulcsszavas fallback
+  try {
+    const q = encodeURIComponent(query.split(' ').slice(0, 3).join(' & '));
+    const resp = await fetch(
+      `${sbUrl}/rest/v1/documents?select=title,content&or=(content.ilike.*${encodeURIComponent(query.split(' ')[0])}*,title.ilike.*${encodeURIComponent(query.split(' ')[0])}*)&limit=4`,
+      { headers: { 'apikey': sbKey, 'Authorization': `Bearer ${sbKey}` } }
+    );
+    const data = await resp.json();
+    if (Array.isArray(data) && data.length > 0) {
+      return {
+        results: data.map(r => ({ name: r.title, content: r.content, score: 0 })),
+        method: 'keyword'
+      };
+    }
+  } catch(e) { console.warn('Keyword search failed:', e); }
+
+  return { results: [], method: 'none' };
+}
+
+// ===== CHAT LOGIKA =====
+async function sendMessage() {
+  const input = document.getElementById('user-input');
+  const text = input.value.trim();
+  if (!text) return;
+  if (!apiKey) { addMsg('Add meg a Gemini API kulcsot a Beállítások fülön!', 'error'); return; }
+
+  input.value = '';
+  input.style.height = '42px';
+  addMsg(text, 'user');
+  document.getElementById('send-btn').disabled = true;
+  chatHistory.push({ role: 'user', parts: [{ text }] });
+
+  const typingDiv = addMsg('Keresés...', 'ai');
+  typingDiv.classList.add('typing');
+
+  try {
+    // Tudásbázis keresés
+    typingDiv.textContent = sbUrl && sbKey ? 'Keresés a tudásbázisban...' : 'Gondolkodik...';
+    const { results, method } = await searchKnowledgeBase(text);
+    lastSearchMethod = method;
+    typingDiv.textContent = 'Gondolkodik...';
+
+    // System prompt összeállítás
+    let fullPrompt = SYSTEM_PROMPT;
+    if (results.length > 0) {
+      const ctx = results.map((r, i) => `### [${i+1}] ${r.name}\n${r.content}`).join('\n\n---\n\n');
+      fullPrompt += '\n\n## Tudásbázis – releváns dokumentumok\n' + ctx;
+    } else if (sbUrl && sbKey) {
+      fullPrompt += '\n\n(A tudásbázisban nem találtam pontos egyezést. Általános szakmai tudásból válaszolj, de jelezd: "⚠️ A tudásbázisban nincs erre konkrét dokumentum.")';
+    }
+
+    // Gemini API hívás
+    const resp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          system_instruction: { parts: [{ text: fullPrompt }] },
+          contents: chatHistory
+        })
+      }
+    );
+
+    const data = await resp.json();
+    if (data.error) {
+      typingDiv.remove();
+      addMsg('API hiba: ' + data.error.message, 'error');
+      chatHistory.pop();
+      return;
+    }
+
+    const reply = data.candidates[0].content.parts[0].text;
+    chatHistory.push({ role: 'model', parts: [{ text: reply }] });
+
+    typingDiv.classList.remove('typing');
+    typingDiv.innerHTML = '';
+
+    // Badge
+    const badge = document.createElement('div');
+    if (results.length > 0) {
+      const maxScore = Math.max(...results.map(s => s.score || 0));
+      const icon = method === 'semantic' ? '🧠' : '🔤';
+      const label = method === 'semantic' ? 'szemantikus' : 'kulcsszavas';
+      const strong = method === 'semantic' ? maxScore >= 65 : true;
+      badge.className = 'source-badge ' + (strong ? 'kb' : 'general');
+      badge.textContent = `📚 ${icon} tudásbázis – ${label} (${results.length} forrás)`;
+    } else if (sbUrl && sbKey) {
+      badge.className = 'source-badge general';
+      badge.textContent = '⚠️ Nincs KB találat – általános AI tudás';
+    } else {
+      badge.className = 'source-badge general';
+      badge.textContent = '⚠️ Nincs tudásbázis – általános AI tudás';
+    }
+    typingDiv.appendChild(badge);
+
+    const textDiv = document.createElement('div');
+    textDiv.innerHTML = formatAI(reply);
+    typingDiv.appendChild(textDiv);
+
+    // Forrás chipek
+    if (results.length > 0) {
+      const srcDiv = document.createElement('div');
+      srcDiv.className = 'sources';
+      srcDiv.innerHTML = '📄 Források:<br>';
+      results.forEach((s, i) => {
+        const chip = document.createElement('span');
+        chip.className = 'src-item';
+        chip.textContent = `[${i+1}] ${s.name}` + (s.score ? ` (${s.score}%)` : '');
+        const snippet = document.createElement('div');
+        snippet.className = 'src-snippet';
+        snippet.textContent = (s.content || '').slice(0, 1200) + ((s.content || '').length > 1200 ? '\n...' : '');
+        chip.onclick = () => { snippet.style.display = snippet.style.display === 'block' ? 'none' : 'block'; };
+        srcDiv.appendChild(chip);
+        srcDiv.appendChild(snippet);
+      });
+      typingDiv.appendChild(srcDiv);
+    }
+    typingDiv.scrollIntoView({ behavior: 'smooth' });
+
+  } catch(err) {
+    typingDiv.remove();
+    addMsg('Hiba: ' + err.message, 'error');
+    chatHistory.pop();
+  }
+
+  document.getElementById('send-btn').disabled = false;
+  input.focus();
+}
+
+// ===== UI SEGÉDFÜGGVÉNYEK =====
+function addMsg(text, cls) {
+  const div = document.createElement('div');
+  div.className = 'msg ' + cls;
+  div.textContent = text;
+  document.getElementById('chat-container').appendChild(div);
+  div.scrollIntoView({ behavior: 'smooth' });
+  return div;
+}
+
+function formatAI(text) {
+  return text
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\n/g, '<br>');
+}
+
+function handleKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+}
+
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 100) + 'px';
+}
+
+function renderQuickBtns() {
+  const c = document.getElementById('quick-btns');
+  c.innerHTML = '';
+  QUICK_BTNS.forEach(([label, prompt]) => {
+    const b = document.createElement('button');
+    b.className = 'qbtn';
+    b.textContent = label;
+    b.onclick = () => { document.getElementById('user-input').value = prompt; sendMessage(); };
+    c.appendChild(b);
+  });
+}
+
+function switchTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach((b, i) => {
+    b.classList.toggle('active', (i === 0 && tab === 'chat') || (i === 1 && tab === 'settings'));
+  });
+  document.getElementById('chat-view').style.display = tab === 'chat' ? 'flex' : 'none';
+  document.getElementById('settings-panel').style.display = tab === 'settings' ? 'flex' : 'none';
+
+  if (tab === 'settings') {
+    if (apiKey) document.getElementById('settings-api-key').value = '••••••••';
+    document.getElementById('settings-sb-url').value = sbUrl;
+    if (sbKey) document.getElementById('settings-sb-key').value = '••••••••';
+  }
+}
+
+function showToast(msg) {
+  const t = document.createElement('div');
+  t.textContent = msg;
+  t.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#1e3a5f;color:#7dd3fc;padding:8px 16px;border-radius:20px;font-size:12px;z-index:999;';
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 2000);
+}
+
+function quickAsk(q) {
+  document.getElementById('user-input').value = q;
+  sendMessage();
+}
+
+// ===== HANGBEVITEL (Speech-to-Text) =====
+let recognition = null;
+let isRecording = false;
+
+function initSpeech() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    document.getElementById('mic-btn').style.display = 'none';
+    return;
+  }
+  recognition = new SpeechRecognition();
+  recognition.lang = 'hu-HU';
+  recognition.interimResults = true;
+  recognition.continuous = false;
+  recognition.maxAlternatives = 1;
+
+  recognition.onresult = function(event) {
+    let transcript = '';
+    for (let i = 0; i < event.results.length; i++) {
+      transcript += event.results[i][0].transcript;
+    }
+    document.getElementById('user-input').value = transcript;
+    autoResize(document.getElementById('user-input'));
+  };
+
+  recognition.onend = function() {
+    isRecording = false;
+    document.getElementById('mic-btn').classList.remove('recording');
+    // Ha van szöveg, automatikusan elküldi
+    const input = document.getElementById('user-input');
+    if (input.value.trim().length > 3) {
+      sendMessage();
+    }
+  };
+
+  recognition.onerror = function(event) {
+    isRecording = false;
+    document.getElementById('mic-btn').classList.remove('recording');
+    if (event.error === 'not-allowed') {
+      showToast('Mikrofon hozzáférés megtagadva');
+    } else if (event.error !== 'no-speech') {
+      showToast('Hangfelismerési hiba: ' + event.error);
+    }
+  };
+}
+
+function toggleMic() {
+  if (!recognition) {
+    initSpeech();
+    if (!recognition) {
+      showToast('A böngésző nem támogatja a hangfelismerést');
+      return;
+    }
+  }
+
+  if (isRecording) {
+    recognition.stop();
+    isRecording = false;
+    document.getElementById('mic-btn').classList.remove('recording');
+  } else {
+    document.getElementById('user-input').value = '';
+    recognition.start();
+    isRecording = true;
+    document.getElementById('mic-btn').classList.add('recording');
+    showToast('Beszélj... 🎤');
+  }
+}
+
+// Speech init
+initSpeech();
+</script>
+</body>
+</html>
