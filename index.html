@@ -881,10 +881,9 @@ function initSpeech() {
   };
 
   recognition.onend = function() {
-    // Ha NEM a felhasználó állította le (csak szünet volt), automatikusan folytatjuk a figyelést
-    if (!manualStop) {
-      try { recognition.start(); return; } catch(e) { /* már fut vagy nem indul újra */ }
-    }
+    // A felismerés leállt (a continuous=true elviszi a rövid szüneteket).
+    // Nem indítjuk újra automatikusan, mert az átfedő munkamenetek miatt
+    // többszöröződne a szöveg. Újrakezdéshez nyomd meg ismét a mikrofon gombot.
     isRecording = false;
     document.getElementById('mic-btn').classList.remove('recording');
     const input = document.getElementById('user-input');
