@@ -416,6 +416,8 @@ body.standalone .ver { font-size: calc(12px * var(--pwa-scale)) !important; }
     </div>
     <br>
     <button class="save-btn" onclick="saveSupabase()">Mentés</button>
+    <button class="save-btn" style="background:#16a34a;margin-top:8px;" onclick="testKnowledgeBase()">🔍 Tudásbázis teszt</button>
+    <div id="kb-test-result" style="display:none;margin-top:12px;font-size:13px;line-height:1.7;white-space:pre-wrap;background:#0f172a;border-radius:8px;padding:12px;"></div>
   </div>
 
   <div class="settings-group">
@@ -541,6 +543,108 @@ function saveSupabase() {
   if (key && !key.startsWith('•')) { sbKey = key; localStorage.setItem('hutestech_sb_key', key); document.getElementById('settings-sb-key').value = '••••••••'; }
   updateKbStatus();
   showToast('Supabase beállítás mentve ✓');
+}
+
+async function testKnowledgeBase() {
+  const box = document.getElementById('kb-test-result');
+  box.style.display = 'block';
+  box.style.color = '#e2e8f0';
+
+  if (!sbUrl || !sbKey) {
+    box.style.color = '#fca5a5';
+    box.textContent = '❌ Hiányzik a Supabase URL vagy kulcs. Töltsd ki és mentsd el előbb.';
+    return;
+  }
+
+  let report = '⏳ Tesztelés folyamatban...\n';
+  box.textContent = report;
+
+  // 1) Kapcsolat + dokumentumszám lekérdezése (count=exact a Content-Range fejlécben)
+  try {
+    const resp = await fetch(`${sbUrl}/rest/v1/documents?select=id`, {
+      method: 'GET',
+      headers: {
+        'apikey': sbKey,
+        'Authorization': `Bearer ${sbKey}`,
+        'Range': '0-0',
+        'Prefer': 'count=exact'
+      }
+    });
+    if (!resp.ok) {
+      box.style.color = '#fca5a5';
+      box.textContent = `❌ Kapcsolódási hiba (HTTP ${resp.status}).\n` +
+        (resp.status === 401 ? 'A kulcs valószínűleg hibás.\n' : '') +
+        (resp.status === 404 ? 'Nincs "documents" tábla – futtatd a supabase_setup.sql-t.\n' : '') +
+        await resp.text();
+      return;
+    }
+    const range = resp.headers.get('content-range') || '';
+    const total = range.includes('/') ? range.split('/')[1] : '?';
+    report = `✅ Supabase kapcsolat OK\n📚 Dokumentumok száma: ${total}\n`;
+    box.textContent = report;
+    if (total === '0') {
+      box.style.color = '#fcd34d';
+      report += '\n⚠️ A tudásbázis ÜRES. Tölts fel dokumentumokat az admin.html oldalon.';
+      box.textContent = report;
+      return;
+    }
+  } catch(e) {
+    box.style.color = '#fca5a5';
+    box.textContent = '❌ Hálózati hiba a kapcsolódáskor:\n' + e.message +
+      '\n\nLehet, hogy a Supabase projekt szünetel (unpause kell), vagy rossz az URL.';
+    return;
+  }
+
+  // 2) Szemantikus keresés teszt (csak ha van Gemini API kulcs)
+  if (!apiKey) {
+    report += '\nℹ️ Szemantikus keresés teszt kihagyva (nincs Gemini API kulcs).\n' +
+      'A kulcsszavas keresés ettől még működik.';
+    box.textContent = report;
+    return;
+  }
+
+  report += '\n⏳ Szemantikus keresés tesztelése...';
+  box.textContent = report;
+  try {
+    const testQuery = 'hűtőközeg nyomás';
+    const embedding = await embedQuery(testQuery);
+    const resp = await fetch(`${sbUrl}/rest/v1/rpc/match_documents`, {
+      method: 'POST',
+      headers: {
+        'apikey': sbKey,
+        'Authorization': `Bearer ${sbKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ query_embedding: embedding, match_threshold: 0.3, match_count: 3 })
+    });
+    const data = await resp.json();
+    if (data.code || data.message) {
+      report = report.replace('\n⏳ Szemantikus keresés tesztelése...', '');
+      box.style.color = '#fcd34d';
+      report += `\n⚠️ Szemantikus keresés hiba: ${data.message || data.code}\n` +
+        'Lehet, hogy hiányzik a match_documents függvény – futtatd a supabase_setup.sql-t.';
+      box.textContent = report;
+      return;
+    }
+    report = report.replace('\n⏳ Szemantikus keresés tesztelése...', '');
+    const n = Array.isArray(data) ? data.length : 0;
+    report += `\n🧠 Szemantikus keresés OK – "${testQuery}" próbára ${n} találat`;
+    if (n > 0) {
+      report += ':\n';
+      data.forEach((r, i) => {
+        report += `   [${i+1}] ${r.title} (${Math.round((r.similarity||0)*100)}%)\n`;
+      });
+      report += '\n✅ A tudásbázis teljesen működik!';
+    } else {
+      report += '\n(0 találat erre a próbakérdésre, de a kapcsolat és a függvény működik.)';
+    }
+    box.textContent = report;
+  } catch(e) {
+    box.style.color = '#fcd34d';
+    report = report.replace('\n⏳ Szemantikus keresés tesztelése...', '');
+    report += '\n⚠️ Szemantikus keresés hiba:\n' + e.message;
+    box.textContent = report;
+  }
 }
 
 function updateKbStatus() {
