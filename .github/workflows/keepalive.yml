@@ -1,0 +1,32 @@
+name: Supabase Keep-Alive
+
+# Megakadályozza, hogy a Supabase ingyenes projekt 7 nap inaktivitás után leálljon.
+# Minden 3. napon lefut egy egyszerű lekérdezés a documents tábla felé.
+
+on:
+  schedule:
+    # Minden 3. napon, reggel 6:00 UTC-kor
+    - cron: "0 6 */3 * *"
+  workflow_dispatch:  # Kézi indítás is lehetséges a GitHub Actions fülön
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase REST API
+        run: |
+          echo "Supabase keep-alive ping indítása..."
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+            "${SUPABASE_URL}/rest/v1/documents?select=id&limit=1" \
+            -H "apikey: ${SUPABASE_ANON_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}")
+          echo "HTTP válaszkód: ${HTTP_CODE}"
+          if [ "${HTTP_CODE}" -ge 200 ] && [ "${HTTP_CODE}" -lt 300 ]; then
+            echo "Sikeres ping - a projekt aktív marad."
+          else
+            echo "Hiba: a Supabase nem válaszolt sikeresen (HTTP ${HTTP_CODE})."
+            exit 1
+          fi
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
