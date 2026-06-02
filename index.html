@@ -637,23 +637,44 @@ async function sendMessage() {
       fullPrompt += '\n\n(A tudásbázisban nem találtam pontos egyezést. Általános szakmai tudásból válaszolj, de jelezd: "⚠️ A tudásbázisban nincs erre konkrét dokumentum.")';
     }
 
-    // Gemini API hívás
-    const resp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          system_instruction: { parts: [{ text: fullPrompt }] },
-          contents: chatHistory
-        })
+    // Gemini API hívás – automatikus újrapróbálkozással túlterheltség (503) esetén
+    const MAX_RETRIES = 3;
+    let data = null;
+    let lastErr = null;
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      const resp = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            system_instruction: { parts: [{ text: fullPrompt }] },
+            contents: chatHistory
+          })
+        }
+      );
+      data = await resp.json();
+      // Túlterheltség (503) vagy átmeneti hiba esetén várunk és újrapróbáljuk
+      const overloaded = resp.status === 503 ||
+        (data.error && (data.error.code === 503 ||
+          /overload|high demand|unavailable|try again/i.test(data.error.message || '')));
+      if (overloaded && attempt < MAX_RETRIES) {
+        lastErr = data.error;
+        const waitSec = (attempt + 1) * 2; // 2s, 4s, 6s
+        typingDiv.textContent = `A szerver túlterhelt, újrapróbálkozás ${waitSec} mp múlva... (${attempt + 1}/${MAX_RETRIES})`;
+        await new Promise(r => setTimeout(r, waitSec * 1000));
+        continue;
       }
-    );
+      break;
+    }
 
-    const data = await resp.json();
     if (data.error) {
       typingDiv.remove();
-      addMsg('API hiba: ' + data.error.message, 'error');
+      let msg = data.error.message;
+      if (/overload|high demand|unavailable/i.test(msg || '')) {
+        msg = 'A Gemini szerver jelenleg túlterhelt. Próbáld újra pár perc múlva.';
+      }
+      addMsg('API hiba: ' + msg, 'error');
       chatHistory.pop();
       return;
     }
@@ -806,22 +827,32 @@ function initSpeech() {
     autoResize(document.getElementById('user-input'));
   };
 
+  recognition.onspeechstart = function() {
+    showToast('Hallak... 🎤');
+  };
+
   recognition.onend = function() {
     isRecording = false;
     document.getElementById('mic-btn').classList.remove('recording');
-    // Ha van szöveg, automatikusan elküldi
+    // A felismert szöveg a beviteli mezőben marad – a küldés gombbal küldöd el.
     const input = document.getElementById('user-input');
-    if (input.value.trim().length > 3) {
-      sendMessage();
+    if (input.value.trim().length > 0) {
+      input.focus();
     }
   };
 
   recognition.onerror = function(event) {
     isRecording = false;
     document.getElementById('mic-btn').classList.remove('recording');
-    if (event.error === 'not-allowed') {
-      showToast('Mikrofon hozzáférés megtagadva');
-    } else if (event.error !== 'no-speech') {
+    if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+      showToast('Mikrofon hozzáférés megtagadva – engedélyezd a böngészőben');
+    } else if (event.error === 'no-speech') {
+      showToast('Nem hallottam beszédet – próbáld újra');
+    } else if (event.error === 'audio-capture') {
+      showToast('Nincs elérhető mikrofon');
+    } else if (event.error === 'network') {
+      showToast('Hálózati hiba a hangfelismerésnél');
+    } else {
       showToast('Hangfelismerési hiba: ' + event.error);
     }
   };
