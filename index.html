@@ -250,6 +250,18 @@ body {
   font-family: monospace;
 }
 .settings-group input:focus { border-color: #0ea5e9; }
+.settings-group select {
+  width: 100%;
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  color: #e2e8f0;
+  padding: 12px 14px;
+  font-size: 16px;
+  margin-bottom: 10px;
+  outline: none;
+}
+.settings-group select:focus { border-color: #0ea5e9; }
 .settings-group .save-btn {
   background: #0ea5e9;
   color: white;
@@ -381,6 +393,18 @@ body.standalone .ver { font-size: calc(12px * var(--pwa-scale)) !important; }
   </div>
 
   <div class="settings-group">
+    <h3>⚙️ AI modell</h3>
+    <label>Válaszd ki, melyik Gemini modell válaszoljon</label>
+    <select id="settings-model" onchange="saveModel()">
+      <option value="gemini-3.5-flash">gemini-3.5-flash (legokosabb, stabil)</option>
+      <option value="gemini-3-flash-preview">gemini-3-flash-preview (gyors, preview)</option>
+      <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite (leggyorsabb, stabil)</option>
+      <option value="gemini-2.5-flash">gemini-2.5-flash (régebbi, megbízható)</option>
+    </select>
+    <div class="settings-note">Ha a választott modell túlterhelt, az app automatikusan a többivel is próbálkozik.</div>
+  </div>
+
+  <div class="settings-group">
     <h3>🗄️ Supabase tudásbázis</h3>
     <label>Supabase projekt URL</label>
     <input type="text" id="settings-sb-url" placeholder="https://abcdefgh.supabase.co" />
@@ -399,7 +423,7 @@ body.standalone .ver { font-size: calc(12px * var(--pwa-scale)) !important; }
     <div class="settings-note" style="font-size:11px;line-height:1.7;">
       <b>Hűtéstechnikai AI Súgó</b> — PWA alkalmazás<br>
       Ipari és lakossági hűtéstechnikusoknak<br><br>
-      Modellek: gemini-2.5-flash (chat), gemini-embedding-001 (keresés)<br>
+      Modell: a Beállításokban választható (alapért. gemini-3.5-flash), gemini-embedding-001 (keresés)<br>
       Adatbázis: Supabase pgvector<br><br>
       Az API kulcs és beállítások csak a te eszközödön tárolódnak.
     </div>
@@ -457,6 +481,7 @@ let chatHistory = [];
 let apiKey = localStorage.getItem('hutestech_gemini_key') || '';
 let sbUrl = localStorage.getItem('hutestech_sb_url') || '';
 let sbKey = localStorage.getItem('hutestech_sb_key') || '';
+let selectedModel = localStorage.getItem('hutestech_model') || 'gemini-3.5-flash';
 let lastSearchMethod = 'none';
 
 // ===== INIT =====
@@ -471,11 +496,21 @@ window.onload = function() {
   updateKbStatus();
   renderQuickBtns();
 
+  // Modellválasztó beállítása a mentett értékre
+  const modelSel = document.getElementById('settings-model');
+  if (modelSel) modelSel.value = selectedModel;
+
   // Service worker regisztráció
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js').catch(() => {});
   }
 };
+
+function saveModel() {
+  selectedModel = document.getElementById('settings-model').value;
+  localStorage.setItem('hutestech_model', selectedModel);
+  showToast('Modell beállítva: ' + selectedModel);
+}
 
 function saveApiKey() {
   const val = document.getElementById('api-key-input').value.trim();
@@ -637,8 +672,9 @@ async function sendMessage() {
       fullPrompt += '\n\n(A tudásbázisban nem találtam pontos egyezést. Általános szakmai tudásból válaszolj, de jelezd: "⚠️ A tudásbázisban nincs erre konkrét dokumentum.")';
     }
 
-    // Gemini API hívás – újrapróbálkozással és tartalék modellel túlterheltség (503) esetén
-    const MODELS = ['gemini-3.5-flash', 'gemini-2.5-flash', 'gemini-3.1-flash-lite'];
+    // Gemini API hívás – a választott modell az elsődleges, a többi tartalék túlterheltség (503) esetén
+    const ALL_MODELS = ['gemini-3.5-flash', 'gemini-2.5-flash', 'gemini-3.1-flash-lite', 'gemini-3-flash-preview'];
+    const MODELS = [selectedModel, ...ALL_MODELS.filter(m => m !== selectedModel)];
     const MAX_RETRIES = 2;
     let data = null;
     for (let m = 0; m < MODELS.length; m++) {
@@ -811,6 +847,8 @@ function quickAsk(q) {
 // ===== HANGBEVITEL (Speech-to-Text) =====
 let recognition = null;
 let isRecording = false;
+let manualStop = false;            // igaz, ha a felhasználó állította le (ne induljon újra)
+let accumulatedTranscript = '';    // a szünetek közt felgyűlt felismert szöveg
 
 function initSpeech() {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -821,15 +859,20 @@ function initSpeech() {
   recognition = new SpeechRecognition();
   recognition.lang = 'hu-HU';
   recognition.interimResults = true;
-  recognition.continuous = false;
+  recognition.continuous = true;  // ne kapcsoljon ki rövid szünetnél – a mikrofon gombbal állítod le
   recognition.maxAlternatives = 1;
 
   recognition.onresult = function(event) {
-    let transcript = '';
-    for (let i = 0; i < event.results.length; i++) {
-      transcript += event.results[i][0].transcript;
+    let interim = '';
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const t = event.results[i][0].transcript;
+      if (event.results[i].isFinal) {
+        accumulatedTranscript += t;
+      } else {
+        interim += t;
+      }
     }
-    document.getElementById('user-input').value = transcript;
+    document.getElementById('user-input').value = (accumulatedTranscript + interim).trim();
     autoResize(document.getElementById('user-input'));
   };
 
@@ -838,29 +881,33 @@ function initSpeech() {
   };
 
   recognition.onend = function() {
+    // Ha NEM a felhasználó állította le (csak szünet volt), automatikusan folytatjuk a figyelést
+    if (!manualStop) {
+      try { recognition.start(); return; } catch(e) { /* már fut vagy nem indul újra */ }
+    }
     isRecording = false;
     document.getElementById('mic-btn').classList.remove('recording');
-    // A felismert szöveg a beviteli mezőben marad – a küldés gombbal küldöd el.
     const input = document.getElementById('user-input');
-    if (input.value.trim().length > 0) {
-      input.focus();
-    }
+    if (input.value.trim().length > 0) input.focus();
   };
 
   recognition.onerror = function(event) {
-    isRecording = false;
-    document.getElementById('mic-btn').classList.remove('recording');
+    // Végzetes hibáknál ne próbáljon újraindulni
+    if (['not-allowed', 'service-not-allowed', 'audio-capture'].includes(event.error)) {
+      manualStop = true;
+      isRecording = false;
+      document.getElementById('mic-btn').classList.remove('recording');
+    }
     if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
       showToast('Mikrofon hozzáférés megtagadva – engedélyezd a böngészőben');
-    } else if (event.error === 'no-speech') {
-      showToast('Nem hallottam beszédet – próbáld újra');
     } else if (event.error === 'audio-capture') {
       showToast('Nincs elérhető mikrofon');
     } else if (event.error === 'network') {
       showToast('Hálózati hiba a hangfelismerésnél');
-    } else {
+    } else if (event.error !== 'no-speech') {
       showToast('Hangfelismerési hiba: ' + event.error);
     }
+    // 'no-speech' esetén nem szólunk – az onend újraindítja a figyelést
   };
 }
 
@@ -874,15 +921,18 @@ function toggleMic() {
   }
 
   if (isRecording) {
+    manualStop = true;            // felhasználói leállítás – ne induljon újra
     recognition.stop();
     isRecording = false;
     document.getElementById('mic-btn').classList.remove('recording');
   } else {
+    manualStop = false;
+    accumulatedTranscript = '';   // új felvétel – tiszta lappal kezdünk
     document.getElementById('user-input').value = '';
-    recognition.start();
+    try { recognition.start(); } catch(e) {}
     isRecording = true;
     document.getElementById('mic-btn').classList.add('recording');
-    showToast('Beszélj... 🎤');
+    showToast('Beszélj... a mikrofon gombbal állítsd le 🎤');
   }
 }
 
