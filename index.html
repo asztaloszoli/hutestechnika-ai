@@ -637,42 +637,47 @@ async function sendMessage() {
       fullPrompt += '\n\n(A tudásbázisban nem találtam pontos egyezést. Általános szakmai tudásból válaszolj, de jelezd: "⚠️ A tudásbázisban nincs erre konkrét dokumentum.")';
     }
 
-    // Gemini API hívás – automatikus újrapróbálkozással túlterheltség (503) esetén
-    const MAX_RETRIES = 3;
+    // Gemini API hívás – újrapróbálkozással és tartalék modellel túlterheltség (503) esetén
+    const MODELS = ['gemini-3.5-flash', 'gemini-2.5-flash', 'gemini-3.1-flash-lite'];
+    const MAX_RETRIES = 2;
     let data = null;
-    let lastErr = null;
-    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-      const resp = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            system_instruction: { parts: [{ text: fullPrompt }] },
-            contents: chatHistory
-          })
+    for (let m = 0; m < MODELS.length; m++) {
+      let modelDone = false;
+      for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        const resp = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${MODELS[m]}:generateContent?key=${apiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              system_instruction: { parts: [{ text: fullPrompt }] },
+              contents: chatHistory
+            })
+          }
+        );
+        data = await resp.json();
+        // Túlterheltség (503) vagy átmeneti hiba esetén várunk / modellt váltunk
+        const overloaded = resp.status === 503 ||
+          (data.error && (data.error.code === 503 ||
+            /overload|high demand|unavailable|try again/i.test(data.error.message || '')));
+        if (!overloaded) { modelDone = true; break; }
+        if (attempt < MAX_RETRIES) {
+          const waitSec = (attempt + 1) * 2; // 2s, 4s
+          typingDiv.textContent = `A szerver túlterhelt, újrapróbálkozás ${waitSec} mp múlva... (${MODELS[m]} – ${attempt + 1}/${MAX_RETRIES})`;
+          await new Promise(r => setTimeout(r, waitSec * 1000));
+        } else if (m < MODELS.length - 1) {
+          typingDiv.textContent = `Tartalék modellre váltás: ${MODELS[m + 1]}...`;
+          await new Promise(r => setTimeout(r, 600));
         }
-      );
-      data = await resp.json();
-      // Túlterheltség (503) vagy átmeneti hiba esetén várunk és újrapróbáljuk
-      const overloaded = resp.status === 503 ||
-        (data.error && (data.error.code === 503 ||
-          /overload|high demand|unavailable|try again/i.test(data.error.message || '')));
-      if (overloaded && attempt < MAX_RETRIES) {
-        lastErr = data.error;
-        const waitSec = (attempt + 1) * 2; // 2s, 4s, 6s
-        typingDiv.textContent = `A szerver túlterhelt, újrapróbálkozás ${waitSec} mp múlva... (${attempt + 1}/${MAX_RETRIES})`;
-        await new Promise(r => setTimeout(r, waitSec * 1000));
-        continue;
       }
-      break;
+      if (modelDone) break;
     }
 
     if (data.error) {
       typingDiv.remove();
       let msg = data.error.message;
       if (/overload|high demand|unavailable/i.test(msg || '')) {
-        msg = 'A Gemini szerver jelenleg túlterhelt. Próbáld újra pár perc múlva.';
+        msg = 'A Gemini szerverek jelenleg túlterheltek (minden modell). Próbáld újra pár perc múlva.';
       }
       addMsg('API hiba: ' + msg, 'error');
       chatHistory.pop();
@@ -731,10 +736,11 @@ async function sendMessage() {
     typingDiv.remove();
     addMsg('Hiba: ' + err.message, 'error');
     chatHistory.pop();
+  } finally {
+    // MINDIG fusson le, még hiba/korai return esetén is, hogy a küldés gomb ne maradjon szürkén
+    document.getElementById('send-btn').disabled = false;
+    input.focus();
   }
-
-  document.getElementById('send-btn').disabled = false;
-  input.focus();
 }
 
 // ===== UI SEGÉDFÜGGVÉNYEK =====
