@@ -1,0 +1,45 @@
+{
+  "name": "hutestechnika-ai",
+  "version": "1.0.0",
+  "description": "Hűtéstechnikai AI súgó és admin felület – asztali alkalmazás",
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder"
+  },
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^31.7.6",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "hu.hutestechnika.ai",
+    "productName": "Hutestechnika AI",
+    "files": [
+      "electron/**/*",
+      "start.html",
+      "index.html",
+      "admin.html",
+      "manifest.json",
+      "sw.js",
+      "icon.ico",
+      "icon.svg",
+      "icon-192.png",
+      "icon-512.png"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "icon-512.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Hűtéstechnika AI",
+      "uninstallDisplayName": "Hűtéstechnika AI"
+    }
+  }
+}

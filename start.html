@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hűtéstechnika AI – Indító</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Segoe UI', Arial, sans-serif;
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  color: #e2e8f0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+h1 { color: #7dd3fc; font-size: 28px; margin-bottom: 6px; text-align: center; }
+.subtitle { color: #64748b; font-size: 14px; margin-bottom: 36px; text-align: center; }
+.cards { display: flex; gap: 24px; flex-wrap: wrap; justify-content: center; }
+.card {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 16px;
+  padding: 32px;
+  width: 260px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-decoration: none;
+  color: inherit;
+  display: block;
+}
+.card:hover { border-color: #0ea5e9; transform: translateY(-4px); background: #243349; }
+.card .icon { font-size: 52px; margin-bottom: 16px; }
+.card h2 { color: #7dd3fc; font-size: 20px; margin-bottom: 8px; }
+.card p { color: #94a3b8; font-size: 13px; line-height: 1.5; }
+.footer { color: #475569; font-size: 12px; margin-top: 36px; text-align: center; }
+</style>
+</head>
+<body>
+  <h1>❄️ Hűtéstechnika AI</h1>
+  <p class="subtitle">Válaszd ki, melyik felületet szeretnéd megnyitni</p>
+
+  <div class="cards">
+    <a class="card" href="index.html">
+      <div class="icon">💬</div>
+      <h2>Chat felület</h2>
+      <p>Kérdezz a hűtéstechnikai tudásbázisból. Ezt használják a felhasználók a mindennapi munkához.</p>
+    </a>
+
+    <a class="card" href="admin.html">
+      <div class="icon">🛠️</div>
+      <h2>Admin felület</h2>
+      <p>Dokumentumok feltöltése, kezelése és törlése a tudásbázisban. Csak adminisztrátoroknak.</p>
+    </a>
+  </div>
+
+  <p class="footer">Tipp: ezt az indítót kitűzheted a tálcára vagy az asztalra a parancsikonnal.</p>
+</body>
+</html>

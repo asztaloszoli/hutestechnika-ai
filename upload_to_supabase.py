@@ -94,6 +94,10 @@ def chunk_text(text: str, chunk_size=CHUNK_SIZE, overlap=CHUNK_OVERLAP) -> list[
     return chunks
 
 
+class QuotaExceededError(Exception):
+    pass
+
+
 def embed(text: str) -> list[float]:
     resp = requests.post(
         EMBED_URL + f"?key={GEMINI_KEY}",
@@ -104,6 +108,8 @@ def embed(text: str) -> list[float]:
         },
         timeout=30
     )
+    if resp.status_code == 429 or (resp.status_code != 200 and "quota" in resp.text.lower()):
+        raise QuotaExceededError(resp.json().get("error", {}).get("message", "Quota exceeded"))
     resp.raise_for_status()
     vec = resp.json()["embedding"]["values"]
     # normalizálás
@@ -135,7 +141,7 @@ def upload_chunk(title: str, content: str, embedding: list[float], source: str, 
     return True
 
 
-def process_file(path: str):
+def process_file(path: str, global_counter: list, start_from: int = 0):
     filename = os.path.basename(path)
     title = os.path.splitext(filename)[0]
     print(f"\n📄 Feldolgozás: {filename}")
@@ -149,15 +155,26 @@ def process_file(path: str):
     print(f"  {len(chunks)} chunk generálva")
 
     for i, chunk in enumerate(chunks):
+        global_counter[0] += 1
+        chunk_num = global_counter[0]
+        if chunk_num < start_from:
+            print(f"  chunk {chunk_num} kihagyva (--start-from {start_from})")
+            continue
         chunk_title = f"{title} [{i+1}/{len(chunks)}]" if len(chunks) > 1 else title
-        print(f"  Embedding {i+1}/{len(chunks)}...", end=" ", flush=True)
+        print(f"  chunk {chunk_num} – Embedding {i+1}/{len(chunks)}...", end=" ", flush=True)
         try:
             emb = embed(chunk)
             ok = upload_chunk(chunk_title, chunk, emb, filename, i)
             print("✓" if ok else "✗")
-            time.sleep(0.3)  # rate limit elkerülése
+            time.sleep(1.0)  # rate limit elkerülése
+        except QuotaExceededError as e:
+            print(f"\n\n⛔ KVÓTA KIMERÜLT a {chunk_num}. chunknál!")
+            print(f"   Hiba: {e}")
+            print(f"\n   Folytatáshoz holnap futtasd újra:")
+            print(f"   python upload_to_supabase.py <mappa> --start-from {chunk_num}")
+            sys.exit(2)
         except Exception as e:
-            print(f"HIBA: {e}")
+            print(f"✗ hiba: {e}")
             time.sleep(2)
 
 
@@ -189,9 +206,20 @@ def main():
         print("Nem találtam .md, .txt vagy .pdf fájlt.")
         sys.exit(1)
 
+    start_from = 1
+    if "--start-from" in sys.argv:
+        idx = sys.argv.index("--start-from")
+        try:
+            start_from = int(sys.argv[idx + 1])
+            print(f"▶️  Folytatás a {start_from}. chunktól...")
+        except (IndexError, ValueError):
+            print("HIBA: --start-from után add meg a chunk számát (pl. --start-from 236)")
+            sys.exit(1)
+
+    global_counter = [0]
     print(f"🔍 {len(files)} fájl feldolgozása...")
     for f in files:
-        process_file(f)
+        process_file(f, global_counter, start_from)
 
     print("\n✅ Kész!")
 

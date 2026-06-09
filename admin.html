@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Tudásbázis Admin – Hűtéstechnika</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
@@ -113,7 +115,12 @@ textarea { resize: vertical; min-height: 120px; font-family: inherit; font-size:
 .log-warn { color: #fcd34d; }
 
 /* Dokumentum lista */
-#doc-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 10px; }
+.doc-scroll { max-height: 300px; overflow-y: auto; margin-top: 8px; border: 1px solid #1e293b; border-radius: 6px; }
+#doc-details > summary { cursor: pointer; color: #7dd3fc; font-size: 13px; margin-top: 12px; list-style: none; user-select: none; }
+#doc-details > summary::-webkit-details-marker { display: none; }
+#doc-details > summary::before { content: '▸ '; }
+#doc-details[open] > summary::before { content: '▾ '; }
+#doc-table { width: 100%; border-collapse: collapse; font-size: 12px; }
 #doc-table th { background: #0f172a; color: #94a3b8; padding: 6px 8px; text-align: left; border-bottom: 1px solid #334155; }
 #doc-table td { padding: 6px 8px; border-bottom: 1px solid #1e293b; vertical-align: top; }
 #doc-table tr:hover td { background: #1e293b; }
@@ -175,6 +182,14 @@ textarea { resize: vertical; min-height: 120px; font-family: inherit; font-size:
       <label>Gemini API kulcs (embedding-hez)</label>
       <input type="password" id="gemini-key" placeholder="AIza..." />
     </div>
+    <div>
+      <label>Tavily API kulcs (a Kutató ügynökhöz – ingyenes: tavily.com, havi 1000 keresés)</label>
+      <input type="password" id="tavily-key" placeholder="tvly-..." />
+    </div>
+    <div>
+      <label>TinyFish API kulcs (opcionális tartalék a kutatáshoz – tinyfish.io)</label>
+      <input type="password" id="tinyfish-key" placeholder="tf_..." />
+    </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
       <button class="btn secondary" onclick="saveConfig()">💾 Mentés</button>
       <button class="btn secondary" onclick="testConnection()">🔌 Kapcsolat tesztelése</button>
@@ -189,9 +204,9 @@ textarea { resize: vertical; min-height: 120px; font-family: inherit; font-size:
     <div id="drop-zone" onclick="document.getElementById('file-input').click()">
       <div class="dz-icon">📁</div>
       <div class="dz-text">Húzd ide a fájlokat, vagy kattints a kiválasztáshoz</div>
-      <div class="dz-sub">.pdf · .txt · .md · Kép (.jpg .png) – OCR-rel</div>
+      <div class="dz-sub">.pdf · Word (.docx) · .txt · .md · .csv · Kép (.jpg .png) – OCR-rel</div>
     </div>
-    <input type="file" id="file-input" multiple accept=".pdf,.txt,.md,.jpg,.jpeg,.png,.webp" onchange="addFiles(this.files)">
+    <input type="file" id="file-input" multiple accept=".pdf,.docx,.txt,.md,.csv,.json,.html,.htm,.xml,.jpg,.jpeg,.png,.webp" onchange="addFiles(this.files)">
     <div id="file-list"></div>
 
     <!-- Vagy szöveg direkt -->
@@ -225,35 +240,110 @@ textarea { resize: vertical; min-height: 120px; font-family: inherit; font-size:
     </div>
   </div>
 
+  <!-- Webcím -->
+  <div class="card">
+    <h2>🌐 Webcím</h2>
+    <p style="font-size:12px;color:#94a3b8;margin-bottom:10px;">
+      Illessz be egy <b>weboldal-linket</b> (pl. gyártói leírás, cikk). A szöveget kinyerem és feltöltöm a tudásbázisba.
+    </p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <input type="text" id="url-input" placeholder="https://..." style="flex:1;min-width:240px;" />
+      <button class="btn" onclick="uploadFromUrl()">⬇️ Letöltés és feltöltés</button>
+    </div>
+    <p style="font-size:11px;color:#64748b;margin-top:8px;">
+      Tipp: YouTube-videónál nyisd meg az átiratot a YouTube-on, másold ki a szöveget, és illeszd be lentebb a kézi szövegfeltöltő mezőbe.
+    </p>
+  </div>
+
+  <!-- Kutató ügynök -->
+  <div class="card">
+    <h2>🤖 Kutató ügynök</h2>
+    <p style="font-size:12px;color:#94a3b8;margin-bottom:10px;">
+      Adj meg egy <b>témát</b>, és az ügynök automatikusan rákeres a weben, összegyűjti és
+      elemzi a forrásokat, majd egy <b>strukturált összefoglalót</b> készít, amit feltölt a tudásbázisba.
+    </p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <input type="text" id="research-topic" placeholder="pl. legjobb hőszivattyúk családi házhoz 2026" style="flex:1;min-width:240px;" />
+      <button class="btn" id="research-btn" onclick="runResearch()">🔬 Kutatás indítása</button>
+    </div>
+    <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;font-size:12px;color:#cbd5e1;">
+      <label style="display:flex;align-items:center;gap:6px;">
+        <input type="checkbox" id="research-hu" /> Magyar piac (Google Search) – pl. árak, importőrök
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;">
+        Mélység:
+        <select id="research-depth" style="width:auto;min-width:160px;">
+          <option value="simple" selected>Egyszerű keresés (gyors válasz)</option>
+          <option value="autonomous">Önálló mélykutatás (autonóm)</option>
+          <option value="quick">Piackutatás – gyors (1 fázis)</option>
+          <option value="full">Piackutatás – teljes (3 fázis)</option>
+        </select>
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;">
+        Max. körök (autonóm):
+        <select id="research-rounds" style="width:auto;min-width:70px;">
+          <option value="3">3</option>
+          <option value="5" selected>5</option>
+          <option value="8">8</option>
+        </select>
+      </label>
+    </div>
+    <p style="font-size:11px;color:#64748b;margin-top:8px;">
+      Megjegyzés: a kutatáshoz <b>Tavily API kulcs</b> ajánlott (ingyenes: tavily.com) – kulcs nélkül TinyFish/DuckDuckGo-tartalékkal próbálkozik.
+      Az <b>Egyszerű keresés</b> gyors, egyetlen kérdésre ad választ. Az <b>Önálló mélykutatás</b> magától keres tovább, amíg elég adata lesz (a beállított max. körig). A <b>Piackutatás</b> módok összehasonlító témákhoz valók (pl. „legjobb hőszivattyúk").
+    </p>
+    <div id="research-result" style="display:none;margin-top:10px;">
+      <textarea id="research-output" rows="12" style="width:100%;font-family:monospace;font-size:12px;"></textarea>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+        <button class="btn" onclick="uploadResearch()">⬆️ Feltöltés a tudásbázisba</button>
+        <button class="btn secondary" onclick="downloadResearch()">💾 Letöltés .md fájlként</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Meglévő dokumentumok -->
   <div class="card">
     <h2>📚 Feltöltött dokumentumok</h2>
     <button class="btn secondary" onclick="loadDocs()">🔄 Frissítés</button>
     <button class="btn danger" onclick="deleteAll()" style="margin-left:8px;">🗑️ Összes törlése</button>
-    <table id="doc-table">
-      <thead><tr><th>Cím</th><th>Forrás</th><th>Chunk</th><th></th></tr></thead>
-      <tbody id="doc-tbody"><tr><td colspan="4" style="color:#475569;text-align:center;padding:20px;">Kattints a Frissítés gombra</td></tr></tbody>
-    </table>
+    <details id="doc-details">
+      <summary id="doc-summary">Lista megjelenítése / elrejtése</summary>
+      <div class="doc-scroll">
+        <table id="doc-table">
+          <thead><tr><th>Cím</th><th>Forrás</th><th>Chunk</th><th></th></tr></thead>
+          <tbody id="doc-tbody"><tr><td colspan="4" style="color:#475569;text-align:center;padding:20px;">Kattints a Frissítés gombra</td></tr></tbody>
+        </table>
+      </div>
+    </details>
   </div>
 
-  <div id="log">Admin panel betöltve. Töltsd ki a kapcsolat beállításokat.\n</div>
+  <div id="log">Admin panel betöltve. Töltsd ki a kapcsolat beállításokat.</div>
 </div>
 
 <script>
 // ===== ÁLLAPOT =====
-let sbUrl = '', sbKey = '', geminiKey = '';
+let sbUrl = '', sbKey = '', geminiKey = '', tinyfishKey = '', tavilyKey = '';
 let selectedFiles = [];
 let ocrText = '';
 
 // ===== INIT =====
 window.onload = function() {
+  // pdf.js worker beállítása (PDF szövegkinyeréshez)
+  if (window.pdfjsLib) {
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  }
   sbUrl = localStorage.getItem('admin_sb_url') || '';
   sbKey = localStorage.getItem('admin_sb_key') || '';
   geminiKey = localStorage.getItem('admin_gemini_key') || '';
+  tinyfishKey = localStorage.getItem('admin_tinyfish_key') || '';
+  tavilyKey = localStorage.getItem('admin_tavily_key') || '';
   document.getElementById('sb-url').value = sbUrl;
   if (localStorage.getItem('admin_sb_key')) document.getElementById('sb-key').value = '••••••••';
   else document.getElementById('sb-key').value = sbKey;
   if (geminiKey) document.getElementById('gemini-key').value = '••••••••';
+  if (tinyfishKey) document.getElementById('tinyfish-key').value = '••••••••';
+  if (tavilyKey) document.getElementById('tavily-key').value = '••••••••';
 
   // Drag & drop
   const dz = document.getElementById('drop-zone');
@@ -273,6 +363,10 @@ function saveConfig() {
   if (url) { sbUrl = url; localStorage.setItem('admin_sb_url', url); }
   if (key && !key.startsWith('•')) { sbKey = key; localStorage.setItem('admin_sb_key', key); }
   if (gkey && !gkey.startsWith('•')) { geminiKey = gkey; localStorage.setItem('admin_gemini_key', gkey); }
+  const tkey = document.getElementById('tinyfish-key').value.trim();
+  if (tkey && !tkey.startsWith('•')) { tinyfishKey = tkey; localStorage.setItem('admin_tinyfish_key', tkey); }
+  const tvkey = document.getElementById('tavily-key').value.trim();
+  if (tvkey && !tvkey.startsWith('•')) { tavilyKey = tvkey; localStorage.setItem('admin_tavily_key', tvkey); }
   log('✓ Beállítások mentve', 'ok');
 }
 
@@ -286,10 +380,12 @@ async function testConnection() {
     if (resp.ok) {
       log('✓ Supabase kapcsolat OK', 'ok');
       loadDocs();
+    } else if (resp.status === 401 || resp.status === 403) {
+      log('✗ A Supabase kulcs érvénytelen. Ellenőrizd a Service Role kulcsot (nem az anon!).', 'err');
     } else {
       log(`✗ Supabase hiba: ${resp.status} – ${await resp.text()}`, 'err');
     }
-  } catch(e) { log(`✗ Kapcsolat hiba: ${e.message}`, 'err'); }
+  } catch(e) { log(`✗ Nem sikerült csatlakozni. Ellenőrizd a Supabase URL-t és az internetkapcsolatot.`, 'err'); }
 }
 
 // ===== FÁJLOK =====
@@ -328,6 +424,7 @@ function removeFile(i) {
 
 // ===== CHUNK =====
 function chunkText(text, size = 400, overlap = 50) {
+  text = text.replace(/\u0000/g, '').replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
   const words = text.split(/\s+/).filter(w => w);
   if (words.length <= size) return [text];
   const chunks = [];
@@ -375,31 +472,133 @@ async function insertChunk(title, content, embedding, source, chunkIdx) {
   if (!resp.ok) throw new Error(`${resp.status}: ${await resp.text()}`);
 }
 
-async function processAndUpload(title, content, source) {
-  const chunks = chunkText(content);
-  log(`  📦 ${chunks.length} chunk → embedding + feltöltés...`, 'info');
-  for (let i = 0; i < chunks.length; i++) {
-    const chunkTitle = chunks.length > 1 ? `${title} [${i+1}/${chunks.length}]` : title;
+// Hibaüzenetek osztályozása, hogy érthető magyar üzenetet adjunk
+function classifyError(msg) {
+  msg = (msg || '').toLowerCase();
+  if (/api[_ ]?key|invalid.*key|key.*(invalid|expired|not valid)|unauthor|permission|\b401\b|\b403\b/.test(msg)) return 'auth';
+  if (/quota|exceeded|rate.?limit|exhaust|\b429\b/.test(msg)) return 'rate';
+  if (/unicode|escape|22p05/.test(msg)) return 'data';
+  return 'other';
+}
+
+function friendlyError(cls, raw) {
+  switch (cls) {
+    case 'auth': return 'A Gemini API kulcs érvénytelen vagy lejárt. Ellenőrizd / frissítsd a kulcsot a Kapcsolat beállításoknál (aistudio.google.com/app/apikey).';
+    case 'rate': return 'Elérted a Gemini ingyenes napi/perces kereteit.';
+    case 'data': return 'A szöveg érvénytelen karaktereket tartalmazott (már kiszűrve, próbáld újra).';
+    default: return raw;
+  }
+}
+
+// Embedding automatikus újrapróbálkozással (perces limit átmeneti, ezt kivárjuk)
+async function embedWithRetry(text, chunkLabel) {
+  const MAX_ATTEMPTS = 3;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
-      const emb = await embedText(chunks[i]);
-      await insertChunk(chunkTitle, chunks[i], emb, source, i);
-      log(`  ✓ chunk ${i+1}/${chunks.length}`, 'ok');
-      setProgress(((i + 1) / chunks.length) * 100);
-      await sleep(300);
-    } catch(e) {
-      log(`  ✗ chunk ${i+1} hiba: ${e.message}`, 'err');
-      await sleep(1000);
+      return await embedText(text);
+    } catch (e) {
+      const cls = classifyError(e.message);
+      if (cls === 'rate' && attempt < MAX_ATTEMPTS) {
+        const wait = attempt * 20; // 20mp, majd 40mp
+        log(`  ⏳ ${chunkLabel}: perces limit, várakozás ${wait} mp... (${attempt}/${MAX_ATTEMPTS - 1})`, 'warn');
+        await sleep(wait * 1000);
+        continue;
+      }
+      throw e;
     }
   }
 }
 
+async function processAndUpload(title, content, source) {
+  const chunks = chunkText(content);
+  log(`  📦 ${chunks.length} chunk → embedding + feltöltés...`, 'info');
+  if (chunks.length > 90) {
+    log(`  ⚠️ Ez ${chunks.length} chunk – az ingyenes napi keret (~100 kérés) hamar elfogyhat. Ami ma nem fér bele, holnap folytatható.`, 'warn');
+  }
+  for (let i = 0; i < chunks.length; i++) {
+    const chunkTitle = chunks.length > 1 ? `${title} [${i+1}/${chunks.length}]` : title;
+    try {
+      const emb = await embedWithRetry(chunks[i], `chunk ${i+1}`);
+      await insertChunk(chunkTitle, chunks[i], emb, source, i);
+      log(`  ✓ chunk ${i+1}/${chunks.length}`, 'ok');
+      setProgress(((i + 1) / chunks.length) * 100);
+      await sleep(1000);
+    } catch(e) {
+      const cls = classifyError(e.message);
+      log(`  ✗ chunk ${i+1}: ${friendlyError(cls, e.message)}`, 'err');
+      if (cls === 'rate') {
+        log(`⛔ A napi ingyenes keret elfogyott. A feltöltés leállt a(z) ${i+1}. chunknál – holnap folytatható.`, 'err');
+        throw new Error('QUOTA_EXCEEDED');
+      }
+      if (cls === 'auth') {
+        log('⛔ A feltöltés leállt: javítsd az API kulcsot, majd indítsd újra.', 'err');
+        throw new Error('AUTH_ERROR');
+      }
+      await sleep(2000);
+    }
+  }
+}
+
+// ===== TÁMOGATOTT FORMÁTUMOK =====
+const IMG_EXT = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp'];
+const TEXT_EXT = ['txt', 'md', 'csv', 'json', 'html', 'htm', 'xml', 'log'];
+
 // ===== SZÖVEG KINYERÉS FÁJLBÓL =====
 async function extractText(file) {
   const ext = file.name.split('.').pop().toLowerCase();
-  if (['jpg', 'jpeg', 'png', 'webp'].includes(ext)) {
-    return await ocrImage(file);
+  if (IMG_EXT.includes(ext))  return await ocrImage(file);
+  if (ext === 'pdf')          return await extractPdfText(file);
+  if (ext === 'docx')         return await extractDocxText(file);
+  if (TEXT_EXT.includes(ext)) return await file.text();
+
+  // Ismeretlen / nem támogatott formátum – ne töltsünk fel bináris szemetet
+  const tipp = {
+    doc:  'A régi .doc formátumot a böngésző nem tudja olvasni. Mentsd át .docx vagy PDF formátumba.',
+    xls:  'Excel táblázatot mentsd CSV (.csv) vagy PDF formátumba.',
+    xlsx: 'Excel táblázatot mentsd CSV (.csv) vagy PDF formátumba.',
+    ppt:  'PowerPoint fájlt mentsd PDF formátumba.',
+    pptx: 'PowerPoint fájlt mentsd PDF formátumba.',
+    rtf:  'RTF fájlt mentsd .docx vagy PDF formátumba.',
+    zip:  'Tömörített (.zip) fájl: csomagold ki, és a benne lévő dokumentumokat töltsd fel.',
+    rar:  'Tömörített (.rar) fájl: csomagold ki, és a benne lévő dokumentumokat töltsd fel.',
+    iso:  'Lemezkép (.iso): csatold/csomagold ki, és a benne lévő dokumentumokat töltsd fel egyenként.'
+  }[ext];
+  throw new Error(`Nem támogatott formátum: .${ext}. ${tipp || 'Alakítsd át PDF, Word (.docx) vagy szöveg (.txt) formátumra.'}`);
+}
+
+// ===== PDF SZÖVEG KINYERÉS (pdf.js) =====
+async function extractPdfText(file) {
+  if (!window.pdfjsLib) {
+    throw new Error('A PDF-olvasó nem töltődött be. Ellenőrizd az internetkapcsolatot, és töltsd újra az oldalt.');
   }
-  return await file.text();
+  log(`  📖 PDF olvasása: ${file.name}...`, 'info');
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+  let text = '';
+  for (let p = 1; p <= pdf.numPages; p++) {
+    const page = await pdf.getPage(p);
+    const content = await page.getTextContent();
+    text += content.items.map(it => it.str).join(' ') + '\n';
+    if (p % 20 === 0) log(`     ...${p}/${pdf.numPages} oldal beolvasva`, 'info');
+  }
+  if (!text.trim()) {
+    throw new Error('Ebből a PDF-ből nem sikerült szöveget kinyerni (valószínűleg szkennelt kép). Próbáld az OCR funkciót képként feltöltve.');
+  }
+  return text;
+}
+
+// ===== WORD (.docx) SZÖVEG KINYERÉS (mammoth.js) =====
+async function extractDocxText(file) {
+  if (!window.mammoth) {
+    throw new Error('A Word-olvasó nem töltődött be. Ellenőrizd az internetkapcsolatot, és töltsd újra az oldalt.');
+  }
+  log(`  📝 Word olvasása: ${file.name}...`, 'info');
+  const buf = await file.arrayBuffer();
+  const res = await mammoth.extractRawText({ arrayBuffer: buf });
+  if (!res.value || !res.value.trim()) {
+    throw new Error('Ebből a Word fájlból nem sikerült szöveget kinyerni.');
+  }
+  return res.value;
 }
 
 // ===== OCR – Gemini Vision =====
@@ -409,7 +608,7 @@ async function ocrImage(file) {
   const b64 = await fileToBase64(file);
   const mime = file.type || 'image/jpeg';
   const resp = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${geminiKey}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -449,13 +648,27 @@ async function uploadAll() {
   for (const file of selectedFiles) {
     log(`\n📄 Feldolgozás: ${file.name}`, 'info');
     try {
+      // Nagy fájl figyelmeztetés – a böngésző lefagyhat túl nagy fájltól
+      const sizeMB = file.size / (1024 * 1024);
+      if (sizeMB > 50) {
+        const proceed = confirm(
+          `A "${file.name}" fájl nagyon nagy (${sizeMB.toFixed(0)} MB).\n\n` +
+          `A feldolgozás lassú lehet, és a böngésző le is fagyhat.\n` +
+          `Nagy fájloknál ajánlott szétdarabolni (pl. PDF-et fejezetenként).\n\n` +
+          `Mégis folytatod ezzel a fájllal?`
+        );
+        if (!proceed) { log(`  ⏭️ ${file.name} kihagyva (túl nagy).`, 'warn'); continue; }
+        log(`  ⏳ Nagy fájl beolvasása, ez eltarthat egy ideig...`, 'warn');
+      }
       const text = await extractText(file);
       if (!text.trim()) { log('  ⚠️ Üres fájl, kihagyva.', 'warn'); continue; }
       const title = file.name.replace(/\.[^.]+$/, '');
       await processAndUpload(title, text, file.name);
       log(`✅ ${file.name} kész`, 'ok');
     } catch(e) {
-      log(`✗ ${file.name} hiba: ${e.message}`, 'err');
+      if (e.message === 'QUOTA_EXCEEDED' || e.message === 'AUTH_ERROR') break;
+      const cls = classifyError(e.message);
+      log(`✗ ${file.name}: ${friendlyError(cls, e.message)}`, 'err');
     }
   }
 
@@ -474,11 +687,567 @@ async function uploadManual() {
   if (!title || !content) { log('⚠️ Cím és tartalom kötelező!', 'warn'); return; }
   if (!sbUrl || !sbKey || !geminiKey) { log('⚠️ Töltsd ki az összes beállítást!', 'warn'); return; }
   log(`\n✏️ Manuális feltöltés: "${title}"`, 'info');
-  await processAndUpload(title, content, 'manuális');
-  document.getElementById('manual-title').value = '';
-  document.getElementById('manual-content').value = '';
-  log('✅ Kész', 'ok');
+  try {
+    await processAndUpload(title, content, 'manuális');
+    document.getElementById('manual-title').value = '';
+    document.getElementById('manual-content').value = '';
+    log('✅ Kész', 'ok');
+  } catch(e) {
+    if (e.message !== 'QUOTA_EXCEEDED' && e.message !== 'AUTH_ERROR') {
+      log(`✗ Hiba: ${friendlyError(classifyError(e.message), e.message)}`, 'err');
+    }
+  }
   loadDocs();
+}
+
+// ===== WEBCÍM / YOUTUBE =====
+
+// A böngésző CORS miatt nem tölthet le tetszőleges oldalt közvetlenül,
+// ezért egy nyilvános közvetítőn (proxy) keresztül kérjük le a tartalmat.
+async function fetchViaProxy(url) {
+  // Asztali alkalmazásban (Electron) közvetlenül, CORS-korlát nélkül töltünk le.
+  if (window.desktopApi && window.desktopApi.fetchText) {
+    try {
+      const txt = await window.desktopApi.fetchText(url);
+      if (txt && txt.length > 0) return txt;
+    } catch (e) {
+      // Ha valamiért nem megy, megpróbáljuk a böngészős proxykkal is.
+    }
+  }
+  const proxies = [
+    u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+    u => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
+    u => `https://thingproxy.freeboard.io/fetch/${u}`
+  ];
+  let lastErr;
+  for (const make of proxies) {
+    try {
+      const resp = await fetch(make(url));
+      if (resp.ok) {
+        const txt = await resp.text();
+        if (txt && txt.length > 0) return txt;
+      }
+      lastErr = new Error('HTTP ' + resp.status);
+    } catch (e) { lastErr = e; }
+  }
+  throw new Error('Nem sikerült letölteni a tartalmat (a közvetítő szolgáltatás nem válaszolt). Próbáld újra később, vagy másold ki kézzel a szöveget.');
+}
+
+// HTML entitások (pl. &amp;, &#39;) visszafejtése
+function decodeEntities(str) {
+  const ta = document.createElement('textarea');
+  ta.innerHTML = str;
+  return ta.value;
+}
+
+// HTML-ből tiszta, olvasható szöveg
+function htmlToText(html) {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  doc.querySelectorAll('script,style,noscript,nav,header,footer,svg,iframe,form,button').forEach(el => el.remove());
+  const main = doc.querySelector('article') || doc.querySelector('main') || doc.body;
+  // Blokkszintű elemek után sortörés, hogy ne folyjon össze minden
+  (main || doc.body).querySelectorAll('p,br,div,li,h1,h2,h3,h4,h5,h6,tr').forEach(el => el.append('\n'));
+  let text = (main || doc.body).textContent || '';
+  return text.replace(/[ \t]{2,}/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+async function uploadFromUrl() {
+  const url = document.getElementById('url-input').value.trim();
+  if (!url) { log('⚠️ Illeszd be a linket!', 'warn'); return; }
+  if (!/^https?:\/\//i.test(url)) { log('⚠️ A linknek http:// vagy https:// kezdetűnek kell lennie.', 'warn'); return; }
+  if (!sbUrl || !sbKey || !geminiKey) { log('⚠️ Töltsd ki az összes beállítást (Supabase + Gemini)!', 'warn'); return; }
+
+  log(`\n🌐 Feldolgozás: ${url}`, 'info');
+  setProgress(0);
+  try {
+    log('  ⬇️ Weboldal letöltése...', 'info');
+    const html = await fetchViaProxy(url);
+    const text = htmlToText(html);
+    if (!text || text.length < 50) {
+      throw new Error('Ebből az oldalból nem sikerült érdemi szöveget kinyerni (lehet, hogy bejelentkezést igényel vagy JavaScripttel töltődik be).');
+    }
+    const tMatch = html.match(/<title>([^<]*)<\/title>/i);
+    const title = tMatch ? decodeEntities(tMatch[1]).trim() : url;
+    const source = url;
+
+    log(`  ✓ Szöveg kinyerve (${text.length} karakter) – feltöltés...`, 'ok');
+    await processAndUpload(title, text, source);
+    document.getElementById('url-input').value = '';
+    log('✅ Kész', 'ok');
+  } catch (e) {
+    if (e.message !== 'QUOTA_EXCEEDED' && e.message !== 'AUTH_ERROR') {
+      log(`✗ Hiba: ${e.message}`, 'err');
+    }
+  }
+  loadDocs();
+}
+
+// ===== KUTATÓ ÜGYNÖK =====
+let lastResearch = null;
+
+// Gemini szöveggenerálás (a kutatás tervezéséhez és az elemzéshez)
+// Ha a díjmentes percenkénti limitbe ütközünk (429), automatikusan vár és újrapróbál.
+async function callGemini(prompt, system, opts = {}) {
+  const { temp = 0.3, maxTokens = 2000 } = opts;
+  if (!geminiKey) throw new Error('Gemini API kulcs szükséges.');
+  const body = {
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: {
+      temperature: temp,
+      // A Gemini 3.5 alapból "gondolkodik" (medium szint), és a gondolkodási tokenek
+      // UGYANABBÓL a keretből fogynak, mint a válasz. Alacsony szintre állítjuk, és
+      // külön keretet (+2048) hagyunk a gondolkodásnak, hogy a válasz ne vágódjon le.
+      thinkingConfig: { thinkingLevel: 'low' },
+      maxOutputTokens: maxTokens + 2048,
+    },
+  };
+  if (system) body.system_instruction = { parts: [{ text: system }] };
+
+  const maxRetries = 4;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const resp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${geminiKey}`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+    );
+    const data = await resp.json();
+    if (!data.error) {
+      const cand = (data.candidates && data.candidates[0]) || {};
+      const parts = (cand.content && cand.content.parts) || [];
+      // A gondolkodási ("thought") részeket kihagyjuk, csak a tényleges választ adjuk vissza.
+      return parts.filter(p => !p.thought).map(p => p.text || '').join('').trim();
+    }
+    const msg = data.error.message || '';
+    // Ha a kulcsnak EGYÁLTALÁN nincs ingyenes kerete ehhez a modellhez (limit: 0),
+    // a várakozás-újrapróbálás értelmetlen – azonnal egyértelmű üzenetet adunk.
+    if (/limit:\s*0\b/i.test(msg)) {
+      log('✗ Gemini: ehhez a kulcshoz nincs ingyenes keret erre a modellre (limit: 0). Hozz létre új kulcsot az AI Studio-ban, vagy kapcsolj számlázást.', 'err');
+      throw new Error('AUTH_ERROR');
+    }
+    // 429 / percenkénti vagy napi kvóta: várunk és újrapróbálunk
+    const isRate = resp.status === 429 || /quota|rate|RESOURCE_EXHAUSTED/i.test(msg);
+    if (isRate && attempt < maxRetries) {
+      const m = msg.match(/retry in ([\d.]+)s/i);
+      let waitMs = m ? Math.ceil(parseFloat(m[1]) * 1000) : (attempt + 1) * 8000;
+      waitMs = Math.min(waitMs + 1000, 65000);
+      log(`    ⏳ Gemini kvótalimit – várakozás ${Math.round(waitMs / 1000)} mp, majd újrapróbálom...`, 'warn');
+      await new Promise(r => setTimeout(r, waitMs));
+      continue;
+    }
+    throw new Error('Gemini: ' + msg);
+  }
+  throw new Error('Gemini: a kvóta-limit miatt többszöri próbálkozás után sem sikerült.');
+}
+
+// Gemini hívás a BEÉPÍTETT Google Search eszközzel (Grounding).
+// A modell maga keres a Google-ben, így a magyar PDF árlistákat és importőri
+// oldalakat is megtalálja. Visszaad: { text, sources: [{title,url}] }
+async function callGeminiGrounded(prompt, system, opts = {}) {
+  const { temp = 0.3, maxTokens = 4000 } = opts;
+  if (!geminiKey) throw new Error('Gemini API kulcs szükséges.');
+  const body = {
+    contents: [{ parts: [{ text: prompt }] }],
+    tools: [{ google_search: {} }],
+    generationConfig: {
+      temperature: temp,
+      // Lásd callGemini: a 3.5 gondolkodása ne egye el a válasz keretét.
+      thinkingConfig: { thinkingLevel: 'low' },
+      maxOutputTokens: maxTokens + 2048,
+    },
+  };
+  if (system) body.system_instruction = { parts: [{ text: system }] };
+
+  const maxRetries = 4;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const resp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${geminiKey}`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+    );
+    const data = await resp.json();
+    if (!data.error) {
+      const cand = (data.candidates && data.candidates[0]) || {};
+      const parts = (cand.content && cand.content.parts) || [];
+      // A gondolkodási ("thought") részeket kihagyjuk – csak a tényleges válasz kell.
+      const text = parts.filter(p => !p.thought).map(p => p.text || '').join('').trim();
+      if (cand.finishReason === 'MAX_TOKENS') {
+        log('    ⚠️ A válasz elérte a token-keretet – lehet, hogy hiányos. Próbáld újra, vagy szűkítsd a témát.', 'warn');
+      }
+      // Grounding-források kinyerése (ha a modell visszaadta)
+      const sources = [];
+      const chunks = (cand.groundingMetadata && cand.groundingMetadata.groundingChunks) || [];
+      for (const ch of chunks) {
+        const w = ch.web || {};
+        if (w.uri) sources.push({ title: w.title || w.uri, url: w.uri });
+      }
+      return { text, sources };
+    }
+    const msg = data.error.message || '';
+    if (/limit:\s*0\b/i.test(msg)) {
+      log('✗ Gemini: ehhez a kulcshoz nincs ingyenes keret erre a modellre (limit: 0). Hozz létre új kulcsot az AI Studio-ban, vagy kapcsolj számlázást.', 'err');
+      throw new Error('AUTH_ERROR');
+    }
+    const isRate = resp.status === 429 || /quota|rate|RESOURCE_EXHAUSTED/i.test(msg);
+    if (isRate && attempt < maxRetries) {
+      const m = msg.match(/retry in ([\d.]+)s/i);
+      let waitMs = m ? Math.ceil(parseFloat(m[1]) * 1000) : (attempt + 1) * 8000;
+      waitMs = Math.min(waitMs + 1000, 65000);
+      log(`    ⏳ Gemini kvótalimit – várakozás ${Math.round(waitMs / 1000)} mp, majd újrapróbálom...`, 'warn');
+      await new Promise(r => setTimeout(r, waitMs));
+      continue;
+    }
+    throw new Error('Gemini: ' + msg);
+  }
+  throw new Error('Gemini: a kvóta-limit miatt többszöri próbálkozás után sem sikerült.');
+}
+
+// MAGYAR KUTATÁS GROUNDING-GAL: a Gemini saját Google-keresésével dolgozik.
+// Akkor fut, ha a "Csak magyar (.hu) források" négyzet be van pipálva.
+async function runGroundedResearch(topic) {
+  log(`\n🇭🇺 Google Search Grounding (magyar piac): ${topic}`, 'info');
+  setProgress(20);
+  const system = 'Magyar piackutató szakértő asszisztens vagy, aki a Google keresőt használja. ' +
+    'KIZÁRÓLAG a Google keresési találatokból dolgozz, ne találj ki adatot. ' +
+    'Részesítsd előnyben a magyar (.hu) forrásokat: hivatalos importőri/márkakereskedői oldalak, árlisták (PDF is), magyar tesztek és hírek. ' +
+    'Kifejezetten KERESS konkrét árakat, modelleket, műszaki adatokat. Ha egy adat csak PDF árlistában van, akkor is keresd meg. ' +
+    'Használj magyar köznyelvi szinonimákat is a keresésnél (pl. furgon, kisteherautó, EV van, haszongépjármű). ' +
+    'Ha egy konkrét számra/árra nincs megbízható forrás, írd: "Erről nem találtam megbízható magyar forrást". ' +
+    'A válasz tömör, jól tagolt magyar Markdown legyen, konkrét számokkal és nevekkel.';
+  const prompt = `Téma: ${topic}\n\nKészíts alapos, KONKRÉT magyar piaci összefoglalót a Google keresési találatok alapján. ` +
+    `Szerepeljenek a konkrét nevek/modellek és az árak (nettó/bruttó, ha kiderül), valamint a fontos műszaki adatok. ` +
+    `Ahol releváns, használj felsorolást vagy táblázatot.`;
+  setProgress(45);
+  const { text, sources } = await callGeminiGrounded(prompt, system, { temp: 0.3, maxTokens: 4000 });
+  if (!text) throw new Error('A Gemini Grounding nem adott vissza választ. Próbáld újra, vagy ellenőrizd a Gemini kulcsot.');
+  setProgress(90);
+  let out = text;
+  if (sources.length) {
+    const list = sources.map(s => `- [${s.title}](${s.url})`).join('\n');
+    out += `\n\n## Felhasznált források\n${list}`;
+  }
+  return out;
+}
+
+function parseQueryLines(text) {
+  return text.split('\n')
+    .map(l => l.trim().replace(/^[-•\d.\s]+/, '').trim())
+    .filter(l => l.length > 5);
+}
+
+// Igaz, ha van bármilyen háttér-keresési lehetőség (asztali app)
+function hasSearchBackend() {
+  return !!(window.desktopApi && (window.desktopApi.tavilySearch || window.desktopApi.tfSearch || window.desktopApi.ddgSearch));
+}
+
+// Webkeresés: Tavily (legjobb), majd TinyFish, majd DuckDuckGo-tartalék
+async function researchSearch(query, max = 12) {
+  if (tavilyKey && window.desktopApi && window.desktopApi.tavilySearch) {
+    try {
+      const r = await window.desktopApi.tavilySearch(tavilyKey, query, max);
+      if (r && r.length) return r;
+    } catch (e) { log(`    ⚠️ Tavily keresés hiba: ${e.message}`, 'warn'); }
+  }
+  if (tinyfishKey && window.desktopApi && window.desktopApi.tfSearch) {
+    try {
+      const r = await window.desktopApi.tfSearch(tinyfishKey, query, max);
+      if (r && r.length) return r;
+    } catch (e) { log(`    ⚠️ TinyFish keresés hiba: ${e.message}`, 'warn'); }
+  }
+  if (window.desktopApi && window.desktopApi.ddgSearch) {
+    try { return (await window.desktopApi.ddgSearch(query, max)) || []; }
+    catch (e) { log(`    ⚠️ DuckDuckGo hiba: ${e.message}`, 'warn'); }
+  }
+  return [];
+}
+
+// Oldal tartalmának letöltése: Tavily, majd TinyFish, majd sima letöltés + tisztítás
+async function researchFetch(url, maxChars = 3000) {
+  if (tavilyKey && window.desktopApi && window.desktopApi.tavilyExtract) {
+    try { const c = await window.desktopApi.tavilyExtract(tavilyKey, url, maxChars); if (c) return c; }
+    catch (e) { /* tartalékra esünk */ }
+  }
+  if (tinyfishKey && window.desktopApi && window.desktopApi.tfFetch) {
+    try { const c = await window.desktopApi.tfFetch(tinyfishKey, url, maxChars); if (c) return c; }
+    catch (e) { /* tartalékra esünk */ }
+  }
+  try { const html = await fetchViaProxy(url); return htmlToText(html).slice(0, maxChars); }
+  catch (e) { return ''; }
+}
+
+// Egy keresés végrehajtása: találatok + tartalom összegyűjtése
+async function browseQuery(query, huOnly, maxUrls = 4) {
+  let results = await researchSearch(query, maxUrls + 6);
+  if (huOnly) {
+    const allowed = ['youtube.com', 'youtu.be'];
+    results = results.filter(r => {
+      try {
+        const h = new URL(r.url).hostname.toLowerCase();
+        return h.endsWith('.hu') || allowed.some(a => r.url.includes(a));
+      } catch (e) { return false; }
+    });
+  }
+  if (!results.length) return '';
+  const slice = results.slice(0, maxUrls);
+  const collected = [];
+  for (let i = 0; i < slice.length; i++) {
+    const r = slice[i];
+    log(`    [${i + 1}/${slice.length}] ${r.url.slice(0, 60)}...`, 'info');
+    let entry = `**${r.title}**\nForrás: ${r.url}\nKivonat: ${r.snippet}\n`;
+    if (!/youtube\.com|youtu\.be|tiktok\.com/.test(r.url)) {
+      // A Tavily keresés gyakran mellékeli a tiszta tartalmat – akkor nem töltünk le újra
+      let content = (r.content || '').slice(0, 3000);
+      if (!content) content = await researchFetch(r.url, 3000);
+      if (content) entry += `\nTartalom:\n${content}`;
+    }
+    collected.push(entry);
+  }
+  return collected.join('\n\n---\n\n');
+}
+
+// FÁZIS 1: feltérképező keresések tervezése
+async function planMarketMapping(topic) {
+  const system = 'Te egy piackutató szakértő vagy. Keresési kulcsszavakat TERVEZEL amikkel megtaláljuk az ÖSSZES elérhető opciót a piacon. NE konkrét opciókat keress, hanem összehasonlító cikkeket, toplistákat, áttekintő anyagokat. Válaszolj CSAK a keresési kifejezésekkel, soronként egyet. Semmi más szöveget ne adj.';
+  const prompt = `Téma: ${topic}\n\nKészíts 5-6 keresési kifejezést amik ÖSSZEHASONLÍTÓ CIKKEKET és TELJES LISTÁKAT találnak. NE egy-egy konkrét opciót keress, hanem olyat ami MINDEGYIKET felsorolja vagy összehasonlítja.\n\nKeresési kifejezések:`;
+  return parseQueryLines(await callGemini(prompt, system, { temp: 0.4, maxTokens: 600 })).slice(0, 6);
+}
+
+// FÁZIS 1 eredménye: opciók/márkák kinyerése
+async function extractOptions(topic, mappingResults) {
+  const system = 'A feladatod: az összegyűjtött keresési eredményekből kinyerd az ÖSSZES konkrét opciót/márkát/terméket/szolgáltatót. Legyél teljes körű. Sorolj fel MINDENT amit találtál, röviden.';
+  const combined = mappingResults.map(r => r.slice(0, 1500)).join('\n---\n');
+  const prompt = `Téma: ${topic}\n\nKeresési eredmények:\n${combined}\n\nSorold fel az ÖSSZES talált opciót/márkát/terméket/szolgáltatót. Röviden, csak a neveket és ha van, az árat/jellemzőt. Semmit ne hagyj ki!`;
+  return await callGemini(prompt, system, { temp: 0.2, maxTokens: 1200 });
+}
+
+// FÁZIS 2: részletes keresések tervezése az opciókhoz
+async function planDetailSearches(topic, options) {
+  const system = 'Te egy piackutató vagy. Most minden egyes opcióhoz KONKRÉT keresést kell tervezned: ár, elérhetőség, jellemzők, vélemény, teszt. A keresések legyenek SPECIFIKUSAK. Válaszolj CSAK a keresési kifejezésekkel, soronként egyet.';
+  const prompt = `Téma: ${topic}\n\nEddig talált opciók:\n${options}\n\nKészíts 6-8 KONKRÉT keresést, amelyek a fenti opciókról részletes adatokat hoznak (ár, vélemény, elérhetőség).\n\nKeresési kifejezések:`;
+  return parseQueryLines(await callGemini(prompt, system, { temp: 0.4, maxTokens: 700 })).slice(0, 8);
+}
+
+// FÁZIS 3: szakértői elemzés és összefoglaló
+async function generateExpertAnalysis(topic, allData) {
+  const digestSystem = 'Tömörítsd egyetlen listává az összes talált TÉNYT: nevek, opciók, árak, jellemzők, fontos részletek. Csak tények, semmi magyarázat.';
+  const raw = allData.slice(0, 20).map(r => r.slice(0, 800)).join('\n\n---\n\n');
+  const facts = await callGemini(`Téma: ${topic}\n\nNyers adatok:\n${raw}\n\nTények listája (mindent szerepeltess, semmit ne hagyj ki!):`, digestSystem, { temp: 0.1, maxTokens: 2000 });
+  const system = 'Szakértő elemző vagy. NEM általánosságokat mondasz, hanem KONKRÉT, érthető tanácsot adsz a talált adatokból. A válasz szerkezete: "## 1. Áttekintés", "## 2. Elérhető opciók" (lista vagy táblázat árakkal és jellemzőkkel), "## 3. Összehasonlítás", "## 4. Ajánlás és döntéstámogatás", "## 5. Fontos tudnivalók". Ha valamiről nincs adat: írd "Erről nem találtam információt – érdemes közvetlenül utánajárni". Formátum: Magyar, Markdown.';
+  const prompt = `Téma: ${topic}\n\nÖsszegyűjtött tények:\n${facts}\n\nKészíts TELJES SZAKÉRTŐI ELEMZÉST a fenti struktúra szerint.`;
+  return await callGemini(prompt, system, { temp: 0.3, maxTokens: 4000 });
+}
+
+// EGYSZERŰ MÓD: közvetlen, tényszerű válasz a talált forrásokból
+async function generateSimpleAnswer(topic, data) {
+  const raw = data.slice(0, 12).map(r => r.slice(0, 1200)).join('\n\n---\n\n');
+  const system = 'Hűtéstechnikai szakértő asszisztens vagy. A felhasználó kérdésére adj KONKRÉT, érthető és pontos választ KIZÁRÓLAG a megadott forrásokból. Ne találj ki adatot. Ha valamire nincs információ, írd: "Erről nem találtam megbízható információt". Formátum: tömör magyar Markdown, ahol indokolt felsorolással. Ne erőltess összehasonlító táblázatot, ha a kérdés nem azt kéri.';
+  const prompt = `Kérdés/téma: ${topic}\n\nTalált források:\n${raw}\n\nVálaszolj a kérdésre a források alapján, lényegre törően.`;
+  return await callGemini(prompt, system, { temp: 0.3, maxTokens: 2500 });
+}
+
+// ===== AUTONÓM MÉLYKUTATÁS (Plan → Search → Reflect → Write) =====
+
+// Kezdő keresési kérdések tervezése
+async function planInitialQueries(topic) {
+  const system = 'Kutatástervező vagy. A felhasználó témájához készíts 3-4 kezdő keresési kifejezést, amik a legfontosabb alapinformációkat hozzák. Válaszolj CSAK a keresési kifejezésekkel, soronként egyet, semmi más szöveget.';
+  const prompt = `Téma: ${topic}\n\nKezdő keresési kifejezések:`;
+  return parseQueryLines(await callGemini(prompt, system, { temp: 0.4, maxTokens: 400 })).slice(0, 4);
+}
+
+// Egy kör nyers adatának tömörítése tényekké (a kontextus kordában tartására)
+async function condenseFacts(topic, roundText) {
+  const system = 'Tömörítsd a forrásokból a témához kapcsolódó KONKRÉT TÉNYEKET rövid felsorolásba: nevek, árak, adatok, jellemzők, fontos állítások. Csak tények, magyarázat nélkül. Ami nem kapcsolódik a témához, hagyd ki.';
+  const prompt = `Téma: ${topic}\n\nForrások:\n${roundText.slice(0, 8000)}\n\nTények:`;
+  return await callGemini(prompt, system, { temp: 0.1, maxTokens: 1200 });
+}
+
+// Önreflexió: elég-e az eddigi adat? Ha nem, új kereséseket javasol
+// Visszaad: { done: bool, queries: [] }
+async function reflectGaps(topic, factsSoFar, round) {
+  const system = 'Kutatási minőség-ellenőr vagy. Megkapod a témát és az eddig összegyűjtött tényeket. Döntsd el, elég-e ez a téma ALAPOS megválaszolásához. Ha IGEN, válaszolj pontosan ennyivel: KÉSZ. Ha NEM, sorold fel 2-4 ÚJ, célzott keresési kifejezést, amik a HIÁNYZÓ információt pótolják (soronként egy, semmi más szöveg).';
+  const prompt = `Téma: ${topic}\n\nEddigi tények:\n${factsSoFar.slice(0, 9000)}\n\nElég ez? Ha igen: KÉSZ. Ha nem: új keresések:`;
+  const out = await callGemini(prompt, system, { temp: 0.3, maxTokens: 400 });
+  if (/^\s*KÉSZ\s*$/i.test(out) || /\bKÉSZ\b/i.test(out.split('\n')[0] || '')) return { done: true, queries: [] };
+  const queries = parseQueryLines(out).filter(q => !/^kész$/i.test(q)).slice(0, 4);
+  return { done: queries.length === 0, queries };
+}
+
+// Az autonóm hurok fő logikája
+async function runAutonomousResearch(topic, huOnly, maxRounds) {
+  log(`\n🤖 Önálló mélykutatás: ${topic} (max ${maxRounds} kör)`, 'info');
+  const factsParts = [];
+  const seenQueries = new Set();
+
+  // 1. kör: tervezés
+  log('  📝 Kezdő terv készítése...', 'info');
+  let queries = await planInitialQueries(topic);
+  if (!queries.length) queries = [topic];
+
+  for (let round = 1; round <= maxRounds; round++) {
+    log(`\n  🔄 ${round}. kör – keresések:`, 'info');
+    const roundChunks = [];
+    for (const q of queries) {
+      const key = q.toLowerCase().trim();
+      if (seenQueries.has(key)) continue;
+      seenQueries.add(key);
+      log(`    🔎 ${q}`, 'info');
+      const r = await browseQuery(q, huOnly, 4);
+      if (r) roundChunks.push(r);
+    }
+    setProgress(Math.min(15 + round * Math.round(70 / maxRounds), 85));
+
+    if (roundChunks.length) {
+      log('    🧠 Adatok tömörítése...', 'info');
+      const facts = await condenseFacts(topic, roundChunks.join('\n\n---\n\n'));
+      if (facts) factsParts.push(`### ${round}. kör\n${facts}`);
+    } else if (!factsParts.length && round === 1) {
+      throw new Error('Nem találtam forrásokat. Ellenőrizd a Tavily kulcsot vagy az internetkapcsolatot.');
+    }
+
+    if (round >= maxRounds) { log('  ⏹️ Elértem a max. körszámot.', 'warn'); break; }
+
+    // Önreflexió: van-e még hiány?
+    log('    🤔 Elég-e már az adat? (önellenőrzés)', 'info');
+    const factsSoFar = factsParts.join('\n\n');
+    const { done, queries: newQ } = await reflectGaps(topic, factsSoFar, round);
+    if (done) { log('  ✅ Az ügynök szerint elég adat gyűlt össze.', 'ok'); break; }
+    queries = newQ;
+    log(`    ➕ Új irányok: ${queries.join(' | ')}`, 'info');
+  }
+
+  log('  💡 Végső válasz összeállítása...', 'info');
+  setProgress(90);
+  return await generateSimpleAnswer(topic, [factsParts.join('\n\n')]);
+}
+
+async function runResearch() {
+  const topic = document.getElementById('research-topic').value.trim();
+  if (!topic) { log('⚠️ Adj meg egy témát!', 'warn'); return; }
+  if (!geminiKey) { log('⚠️ Gemini API kulcs szükséges a kutatáshoz!', 'warn'); return; }
+  const huOnly = document.getElementById('research-hu').checked;
+  const depth = document.getElementById('research-depth').value;
+
+  // A Tavily háttér csak akkor kell, ha NEM a magyar Grounding módban vagyunk.
+  // Grounding esetén a Gemini maga keres a Google-ben (a böngészőben is működik).
+  if (!huOnly) {
+    if (!hasSearchBackend()) {
+      log('⚠️ A kutató ügynök csak a telepített asztali appban működik (a böngészőben a keresés CORS miatt nem elérhető).', 'warn');
+      return;
+    }
+    if (!tavilyKey && !tinyfishKey) log('  ℹ️ Nincs Tavily/TinyFish kulcs – DuckDuckGo-tartalékkal próbálkozom (gyengébb lehet).', 'warn');
+  }
+  const btn = document.getElementById('research-btn');
+  btn.disabled = true;
+  document.getElementById('research-result').style.display = 'none';
+  setProgress(0);
+  try {
+    let summary;
+
+    // ── MAGYAR GROUNDING (".hu" négyzet bepipálva): a Gemini beépített Google
+    //    keresését használjuk – jobb a magyar árlistáknál/PDF-eknél, mint a Tavily.
+    //    A mélység-választás ilyenkor nem számít. ──
+    if (huOnly) {
+      summary = await runGroundedResearch(topic);
+      finishResearch(topic, summary, 1);
+      return;
+    }
+
+    if (depth === 'simple') {
+      // ── EGYSZERŰ KERESÉS: egy keresés a témára + közvetlen válasz ──
+      log(`\n🔎 Egyszerű keresés: ${topic}`, 'info');
+      const data = await browseQuery(topic, huOnly, 6);
+      if (!data) throw new Error('Nem találtam forrásokat. Ellenőrizd a Tavily kulcsot vagy az internetkapcsolatot.');
+      setProgress(60);
+      log('  💡 Válasz összeállítása...', 'info');
+      summary = await generateSimpleAnswer(topic, [data]);
+      finishResearch(topic, summary, 1);
+      return;
+    }
+
+    if (depth === 'autonomous') {
+      // ── ÖNÁLLÓ MÉLYKUTATÁS: Plan → Search → Reflect → Write hurok ──
+      const maxRounds = parseInt(document.getElementById('research-rounds').value, 10) || 5;
+      summary = await runAutonomousResearch(topic, huOnly, maxRounds);
+      finishResearch(topic, summary, maxRounds);
+      return;
+    }
+
+    // ── PIACKUTATÁS (gyors/teljes) ──
+    log(`\n🔬 Kutatás indítása: ${topic}`, 'info');
+    const allData = [];
+
+    log('  📡 1. fázis: piacfeltérképezés...', 'info');
+    const mapQueries = await planMarketMapping(topic);
+    mapQueries.forEach(q => log(`    • ${q}`, 'info'));
+    const mappingResults = [];
+    for (let i = 0; i < mapQueries.length; i++) {
+      log(`  🔎 [${i + 1}/${mapQueries.length}] ${mapQueries[i]}`, 'info');
+      const r = await browseQuery(mapQueries[i], huOnly, 4);
+      if (r) { mappingResults.push(r); allData.push(r); }
+      setProgress(Math.round(((i + 1) / mapQueries.length) * 30));
+    }
+    if (!mappingResults.length) {
+      throw new Error('Nem sikerült forrásokat gyűjteni. Ellenőrizd a Tavily kulcsot vagy az internetkapcsolatot.');
+    }
+
+    if (depth === 'full') {
+      log('  🧩 Talált opciók kinyerése...', 'info');
+      const options = await extractOptions(topic, mappingResults);
+      log('  🔎 2. fázis: részletes adatgyűjtés...', 'info');
+      const detailQueries = await planDetailSearches(topic, options);
+      detailQueries.forEach(q => log(`    • ${q}`, 'info'));
+      for (let i = 0; i < detailQueries.length; i++) {
+        log(`  🔎 [${i + 1}/${detailQueries.length}] ${detailQueries[i]}`, 'info');
+        const r = await browseQuery(detailQueries[i], huOnly, 4);
+        if (r) allData.push(r);
+        setProgress(30 + Math.round(((i + 1) / detailQueries.length) * 45));
+      }
+    }
+
+    log('  💡 Elemzés és összefoglaló készítése...', 'info');
+    setProgress(80);
+    summary = await generateExpertAnalysis(topic, allData);
+    finishResearch(topic, summary, allData.length);
+  } catch (e) {
+    if (e.message !== 'QUOTA_EXCEEDED' && e.message !== 'AUTH_ERROR') log(`✗ Hiba: ${e.message}`, 'err');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// Az eredmény megjelenítése és elmentése (közös a módokhoz)
+function finishResearch(topic, summary, count) {
+  const now = new Date();
+  const markdown = `# ${topic}\n\n**Kutatás dátuma:** ${now.toISOString().slice(0, 16).replace('T', ' ')}\n**Feldolgozott keresések:** ${count}\n\n---\n\n${summary}\n\n---\n*Generálva a Kutató ügynök által*\n`;
+  lastResearch = { topic, markdown };
+  document.getElementById('research-output').value = markdown;
+  document.getElementById('research-result').style.display = 'block';
+  setProgress(100);
+  log('✅ Kész. Ellenőrizd az összefoglalót, majd töltsd fel a tudásbázisba.', 'ok');
+}
+
+async function uploadResearch() {
+  if (!lastResearch) { log('⚠️ Előbb futtass egy kutatást!', 'warn'); return; }
+  if (!sbUrl || !sbKey || !geminiKey) { log('⚠️ Töltsd ki az összes beállítást!', 'warn'); return; }
+  const md = document.getElementById('research-output').value.trim();
+  if (!md) { log('⚠️ Üres az összefoglaló!', 'warn'); return; }
+  log(`\n⬆️ Kutatás feltöltése: "${lastResearch.topic}"`, 'info');
+  try {
+    await processAndUpload(`Kutatás: ${lastResearch.topic}`, md, `kutatas:${lastResearch.topic}`);
+    log('✅ Feltöltve a tudásbázisba.', 'ok');
+  } catch (e) {
+    if (e.message !== 'QUOTA_EXCEEDED' && e.message !== 'AUTH_ERROR') log(`✗ Hiba: ${e.message}`, 'err');
+  }
+  loadDocs();
+}
+
+function downloadResearch() {
+  const md = document.getElementById('research-output').value;
+  if (!md) return;
+  const safe = ((lastResearch && lastResearch.topic) || 'kutatas').replace(/[^a-z0-9_\-]+/gi, '_').slice(0, 60);
+  const blob = new Blob([md], { type: 'text/markdown' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `kutatas_${safe}.md`;
+  a.click();
+  URL.revokeObjectURL(a.href);
 }
 
 // ===== OCR PANEL =====
@@ -506,11 +1275,17 @@ async function uploadOcrResult() {
   if (!title || !ocrText) { log('⚠️ Cím és OCR szöveg szükséges!', 'warn'); return; }
   if (!sbUrl || !sbKey || !geminiKey) { log('⚠️ Töltsd ki az összes beállítást!', 'warn'); return; }
   log(`\n📷 OCR feltöltés: "${title}"`, 'info');
-  await processAndUpload(title, ocrText, 'ocr_scan');
-  document.getElementById('ocr-preview').style.display = 'none';
-  document.getElementById('ocr-actions').style.display = 'none';
-  ocrText = '';
-  log('✅ Kész', 'ok');
+  try {
+    await processAndUpload(title, ocrText, 'ocr_scan');
+    document.getElementById('ocr-preview').style.display = 'none';
+    document.getElementById('ocr-actions').style.display = 'none';
+    ocrText = '';
+    log('✅ Kész', 'ok');
+  } catch(e) {
+    if (e.message !== 'QUOTA_EXCEEDED' && e.message !== 'AUTH_ERROR') {
+      log(`✗ Hiba: ${friendlyError(classifyError(e.message), e.message)}`, 'err');
+    }
+  }
   loadDocs();
 }
 
@@ -524,8 +1299,11 @@ async function loadDocs() {
     );
     const docs = await resp.json();
     const tbody = document.getElementById('doc-tbody');
+    const summary = document.getElementById('doc-summary');
+    const details = document.getElementById('doc-details');
     if (!Array.isArray(docs) || docs.length === 0) {
       tbody.innerHTML = '<tr><td colspan="4" style="color:#475569;text-align:center;padding:20px;">Nincs dokumentum</td></tr>';
+      if (summary) summary.textContent = 'Nincs feltöltött dokumentum';
       return;
     }
     tbody.innerHTML = docs.map(d => `
@@ -535,6 +1313,8 @@ async function loadDocs() {
         <td style="color:#64748b">${d.chunk_idx ?? 0}</td>
         <td><span class="doc-del" onclick="deleteDoc(${d.id})" title="Törlés">🗑️</span></td>
       </tr>`).join('');
+    if (summary) summary.textContent = `Lista (${docs.length} elem) – kattints a meg-/elrejtéshez`;
+    if (details) details.open = true;
     log(`✓ ${docs.length} dokumentum betöltve`, 'ok');
   } catch(e) { log(`✗ Lista betöltési hiba: ${e.message}`, 'err'); }
 }
