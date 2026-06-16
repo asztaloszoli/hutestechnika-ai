@@ -16,10 +16,25 @@ jobs:
       - name: Ping Supabase REST API
         run: |
           echo "Supabase keep-alive ping indítása..."
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-            "${SUPABASE_URL}/rest/v1/documents?select=id&limit=1" \
+          if [ -z "${SUPABASE_URL}" ]; then
+            echo "Hiba: hiányzik a SUPABASE_URL GitHub Secret."
+            exit 1
+          fi
+          if [ -z "${SUPABASE_ANON_KEY}" ]; then
+            echo "Hiba: hiányzik a SUPABASE_ANON_KEY GitHub Secret."
+            exit 1
+          fi
+          if ! echo "${SUPABASE_URL}" | grep -Eq '^https://[^/]+\.supabase\.co$'; then
+            echo "Hiba: a SUPABASE_URL formátuma hibás. Példa: https://abcdefgh.supabase.co"
+            exit 1
+          fi
+          HTTP_CODE=$(curl -sS -o /dev/null -w "%{http_code}" --fail-with-body \
+            "${SUPABASE_URL%/}/rest/v1/documents?select=id&limit=1" \
             -H "apikey: ${SUPABASE_ANON_KEY}" \
-            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}")
+            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}") || {
+            echo "Hiba: a Supabase host nem érhető el vagy a kérés sikertelen."
+            exit 1
+          }
           echo "HTTP válaszkód: ${HTTP_CODE}"
           if [ "${HTTP_CODE}" -ge 200 ] && [ "${HTTP_CODE}" -lt 300 ]; then
             echo "Sikeres ping - a projekt aktív marad."
