@@ -265,6 +265,8 @@ textarea { resize: vertical; min-height: 120px; font-family: inherit; font-size:
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
       <input type="text" id="research-topic" placeholder="pl. legjobb hőszivattyúk családi házhoz 2026" style="flex:1;min-width:240px;" />
       <button class="btn" id="research-btn" onclick="runResearch()">🔬 Kutatás indítása</button>
+      <button class="btn secondary" id="research-clear-btn" onclick="clearResearch()" title="Előző kutatás törlése, tiszta lap">🆕 Új kutatás</button>
+      <button class="btn danger" id="research-stop-btn" onclick="stopResearch()" style="display:none;" title="A futó mélykutatás leállítása – az eddigi adatokból megírja a választ">⏹️ Elég – írd meg a választ</button>
     </div>
     <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;font-size:12px;color:#cbd5e1;">
       <label style="display:flex;align-items:center;gap:6px;">
@@ -292,11 +294,34 @@ textarea { resize: vertical; min-height: 120px; font-family: inherit; font-size:
       Megjegyzés: a kutatáshoz <b>Tavily API kulcs</b> ajánlott (ingyenes: tavily.com) – kulcs nélkül TinyFish/DuckDuckGo-tartalékkal próbálkozik.
       Az <b>Egyszerű keresés</b> gyors, egyetlen kérdésre ad választ. Az <b>Önálló mélykutatás</b> magától keres tovább, amíg elég adata lesz (a beállított max. körig). A <b>Piackutatás</b> módok összehasonlító témákhoz valók (pl. „legjobb hőszivattyúk").
     </p>
+    <!-- Élő részeredmények a futó mélykutatás alatt -->
+    <div id="research-live" style="display:none;margin-top:10px;">
+      <div style="font-size:12px;color:#94a3b8;margin-bottom:4px;">📡 <b>Élő részeredmények</b> – a kutatás közben gyűlő tények (körönként frissül):</div>
+      <pre id="research-live-text" style="max-height:220px;overflow-y:auto;background:#0f172a;border:1px solid #334155;border-radius:6px;padding:8px;font-size:11px;white-space:pre-wrap;color:#cbd5e1;margin:0;"></pre>
+    </div>
+    <!-- Korábbi kutatások (a böngésző tárolójába mentve, ablakzárás után is megmaradnak) -->
+    <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:12px;">
+      <span style="color:#94a3b8;">📂 Korábbi kutatások:</span>
+      <select id="research-history-select" style="width:auto;min-width:220px;flex:1;"></select>
+      <button class="btn secondary" onclick="loadResearchFromHistory()">↩️ Betöltés</button>
+      <button class="btn danger" onclick="deleteResearchHistoryItem()" title="Kiválasztott előzmény törlése">🗑️</button>
+    </div>
     <div id="research-result" style="display:none;margin-top:10px;">
       <textarea id="research-output" rows="12" style="width:100%;font-family:monospace;font-size:12px;"></textarea>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
         <button class="btn" onclick="uploadResearch()">⬆️ Feltöltés a tudásbázisba</button>
         <button class="btn secondary" onclick="downloadResearch()">💾 Letöltés .md fájlként</button>
+      </div>
+      <!-- Beszélgetős folytatás: a kész kutatásra építve tovább lehet kérdezni -->
+      <div id="research-chat" style="margin-top:14px;border-top:1px solid #334155;padding-top:10px;">
+        <div style="font-size:12px;color:#94a3b8;margin-bottom:6px;">
+          💬 <b>Folytatás beszélgetéssel</b> – kérdezz rá a kutatásra, és célzottan keresek tovább a meglévő eredményre építve (nem kezdem elölről, a már megnézett oldalakat kihagyom).
+        </div>
+        <div id="research-chat-log" style="max-height:260px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;margin-bottom:8px;"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <input type="text" id="research-followup" placeholder="pl. és a garancia? melyik a legolcsóbb 5 év alatt? van magyar szerviz?" style="flex:1;min-width:220px;" onkeydown="if(event.key==='Enter'){event.preventDefault();askFollowUp();}" />
+          <button class="btn" id="followup-btn" onclick="askFollowUp()">💬 Tovább kérdezek</button>
+        </div>
       </div>
     </div>
   </div>
@@ -784,6 +809,107 @@ async function uploadFromUrl() {
 
 // ===== KUTATÓ ÜGYNÖK =====
 let lastResearch = null;
+// A folyamatban lévő kutatás kontextusa a beszélgetős folytatáshoz
+// { topic, huOnly, contextText, conversation: [{q,a}] }
+let researchContext = null;
+
+// A futó mélykutatás leállítása: a következő kör előtt kiértékelődik,
+// és az addigi adatokból íródik meg a végső válasz
+let stopResearchRequested = false;
+function stopResearch() {
+  stopResearchRequested = true;
+  log('⏹️ Leállítás kérve – a futó kör befejezése után megírom a választ az eddigi adatokból.', 'warn');
+}
+
+// Élő részeredmények frissítése a futó kutatás alatt
+function updateLiveResearch(text) {
+  const box = document.getElementById('research-live');
+  const pre = document.getElementById('research-live-text');
+  if (!box || !pre) return;
+  box.style.display = 'block';
+  pre.textContent = text;
+  pre.scrollTop = pre.scrollHeight;
+}
+function hideLiveResearch() {
+  const box = document.getElementById('research-live');
+  if (box) box.style.display = 'none';
+}
+
+// Szöveg biztonságos HTML-lelé alakítása (a chatben és a listákban használjuk)
+function escHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// ===== KUTATÁSI ELŐZMÉNYEK (localStorage – ablakzárás után is megmaradnak) =====
+function loadResearchHistoryList() {
+  try { return JSON.parse(localStorage.getItem('admin_research_history') || '[]'); } catch (e) { return []; }
+}
+function saveResearchHistory(topic, markdown, huOnly) {
+  let h = loadResearchHistoryList().filter(x => x.topic !== topic);
+  h.unshift({ topic, markdown, huOnly: !!huOnly, date: new Date().toISOString().slice(0, 16).replace('T', ' ') });
+  h = h.slice(0, 20);
+  try { localStorage.setItem('admin_research_history', JSON.stringify(h)); }
+  catch (e) { log('⚠️ Az előzmény nem fért el a tárolóban.', 'warn'); }
+  renderResearchHistory();
+}
+function renderResearchHistory() {
+  const sel = document.getElementById('research-history-select');
+  if (!sel) return;
+  const h = loadResearchHistoryList();
+  sel.innerHTML = h.length
+    ? h.map((x, i) => `<option value="${i}">${escHtml(x.date)} – ${escHtml(String(x.topic).slice(0, 60))}</option>`).join('')
+    : '<option value="">(nincs mentett kutatás)</option>';
+}
+function loadResearchFromHistory() {
+  const sel = document.getElementById('research-history-select');
+  const h = loadResearchHistoryList();
+  const item = h[parseInt(sel && sel.value, 10)];
+  if (!item) { log('⚠️ Nincs betölthető előzmény.', 'warn'); return; }
+  document.getElementById('research-topic').value = item.topic;
+  document.getElementById('research-output').value = item.markdown;
+  document.getElementById('research-result').style.display = 'block';
+  lastResearch = { topic: item.topic, markdown: item.markdown };
+  researchContext = { topic: item.topic, huOnly: !!item.huOnly, contextText: item.markdown, conversation: [] };
+  const chatLog = document.getElementById('research-chat-log');
+  if (chatLog) chatLog.innerHTML = '';
+  appendChat('ai', 'Betöltöttem a korábbi kutatást. Kérdezz rá bármire, és célzottan keresek tovább rá építve.');
+  log(`📂 Előzmény betöltve: ${item.topic}`, 'ok');
+}
+function deleteResearchHistoryItem() {
+  const sel = document.getElementById('research-history-select');
+  const h = loadResearchHistoryList();
+  const i = parseInt(sel && sel.value, 10);
+  if (isNaN(i) || !h[i]) return;
+  h.splice(i, 1);
+  try { localStorage.setItem('admin_research_history', JSON.stringify(h)); } catch (e) {}
+  renderResearchHistory();
+  log('🗑️ Előzmény törölve.', 'ok');
+}
+// Induláskor feltöltjük az előzmény-listát
+renderResearchHistory();
+
+// Előző kutatás törlése – tiszta lap ablak-bezárás nélkül
+function clearResearch() {
+  researchSeenUrls.clear();
+  lastResearch = null;
+  researchContext = null;
+  const topicEl = document.getElementById('research-topic');
+  if (topicEl) topicEl.value = '';
+  const out = document.getElementById('research-output');
+  if (out) out.value = '';
+  const chatLog = document.getElementById('research-chat-log');
+  if (chatLog) chatLog.innerHTML = '';
+  const followup = document.getElementById('research-followup');
+  if (followup) followup.value = '';
+  const resultEl = document.getElementById('research-result');
+  if (resultEl) resultEl.style.display = 'none';
+  hideLiveResearch();
+  const logEl = document.getElementById('log');
+  if (logEl) logEl.textContent = '';
+  setProgress(0);
+  log('🆕 Tiszta lap – indíthatsz új kutatást.', 'ok');
+}
 
 // Gemini szöveggenerálás (a kutatás tervezéséhez és az elemzéshez)
 // Ha a díjmentes percenkénti limitbe ütközünk (429), automatikusan vár és újrapróbál.
@@ -937,6 +1063,18 @@ function hasSearchBackend() {
   return !!(window.desktopApi && (window.desktopApi.tavilySearch || window.desktopApi.tfSearch || window.desktopApi.ddgSearch));
 }
 
+// Egy kutatási futáson belül már letöltött oldalak (hogy ne ugyanazokat olvassuk újra)
+let researchSeenUrls = new Set();
+
+// URL egységesítése a duplikátum-szűréshez (séma, www, # és záró / eltávolítása)
+function normalizeUrl(url) {
+  try {
+    let u = String(url).split('#')[0].trim().toLowerCase();
+    u = u.replace(/^https?:\/\//, '').replace(/^www\./, '');
+    return u.replace(/\/+$/, '');
+  } catch (e) { return String(url); }
+}
+
 // Webkeresés: Tavily (legjobb), majd TinyFish, majd DuckDuckGo-tartalék
 async function researchSearch(query, max = 12) {
   if (tavilyKey && window.desktopApi && window.desktopApi.tavilySearch) {
@@ -972,9 +1110,35 @@ async function researchFetch(url, maxChars = 3000) {
   catch (e) { return ''; }
 }
 
+// Relevancia-előszűrés: a cím+kivonat alapján a Gemini kiválasztja a LEGJOBB találatokat,
+// így nem vakon az első N oldalt dolgozzuk fel, hanem a legígéretesebbeket
+async function pickBestResults(query, candidates, maxUrls) {
+  if (candidates.length <= maxUrls) return candidates;
+  try {
+    const list = candidates.map((r, i) =>
+      `${i + 1}. ${r.title} — ${r.url}\n   ${String(r.snippet || '').slice(0, 150)}`).join('\n');
+    const system = 'Keresési találatok relevancia-bírálója vagy. Válaszd ki a kérdés megválaszolásához LEGRELEVÁNSABB találatokat. ' +
+      'Előnyben: gyártói/hivatalos oldalak, adatlapok, tesztek, összehasonlító cikkek, árlisták. ' +
+      'Kerüld: általános kategórialisták, témába nem vágó oldalak, duplikált hírek. ' +
+      'A találat nyelve NEM számít (angol/német/egyéb forrás is jó, ha releváns). ' +
+      'Válaszolj CSAK a kiválasztott sorszámokkal, vesszővel elválasztva.';
+    const prompt = `Kérdés: ${query}\n\nTalálatok:\n${list}\n\nA ${maxUrls} legrelevánsabb találat sorszáma:`;
+    const out = await callGemini(prompt, system, { temp: 0.1, maxTokens: 100 });
+    const idx = (out.match(/\d+/g) || []).map(n => parseInt(n, 10) - 1)
+      .filter(i => i >= 0 && i < candidates.length);
+    const picked = [...new Set(idx)].slice(0, maxUrls).map(i => candidates[i]);
+    if (picked.length) {
+      log(`    🎯 Relevancia-szűrés: ${candidates.length} találatból ${picked.length} kiválasztva`, 'info');
+      return picked;
+    }
+  } catch (e) { /* hiba esetén az eredeti sorrend első N eleme */ }
+  return candidates.slice(0, maxUrls);
+}
+
 // Egy keresés végrehajtása: találatok + tartalom összegyűjtése
 async function browseQuery(query, huOnly, maxUrls = 4) {
-  let results = await researchSearch(query, maxUrls + 6);
+  // Bővebb merítés, hogy a már látott oldalak kiszűrése után is maradjon új találat
+  let results = await researchSearch(query, maxUrls * 3 + 6);
   if (huOnly) {
     const allowed = ['youtube.com', 'youtu.be'];
     results = results.filter(r => {
@@ -985,7 +1149,23 @@ async function browseQuery(query, huOnly, maxUrls = 4) {
     });
   }
   if (!results.length) return '';
-  const slice = results.slice(0, maxUrls);
+  // Már letöltött oldalak kiszűrése: minden keresés ÚJ forrásokat dolgozzon fel
+  const candidates = [];
+  let skipped = 0;
+  for (const r of results) {
+    const key = normalizeUrl(r.url);
+    if (researchSeenUrls.has(key)) { skipped++; continue; }
+    candidates.push(r);
+    if (candidates.length >= maxUrls * 3) break;
+  }
+  if (skipped > 0) log(`    ♻️ ${skipped} már látott oldal kihagyva (új merítés)`, 'info');
+  if (!candidates.length) return '';
+  // A bő merítésből a legrelevánsabb oldalak kiválasztása (nem vakon az első N)
+  const picked = await pickBestResults(query, candidates, maxUrls);
+  // Párhuzamos kereséseknél közben másik keresés már lefoglalhatta ugyanazt az URL-t → újraszűrés
+  const slice = picked.filter(r => !researchSeenUrls.has(normalizeUrl(r.url)));
+  if (!slice.length) return '';
+  slice.forEach(r => researchSeenUrls.add(normalizeUrl(r.url)));
   const collected = [];
   for (let i = 0; i < slice.length; i++) {
     const r = slice[i];
@@ -1004,9 +1184,11 @@ async function browseQuery(query, huOnly, maxUrls = 4) {
 
 // FÁZIS 1: feltérképező keresések tervezése
 async function planMarketMapping(topic) {
-  const system = 'Te egy piackutató szakértő vagy. Keresési kulcsszavakat TERVEZEL amikkel megtaláljuk az ÖSSZES elérhető opciót a piacon. NE konkrét opciókat keress, hanem összehasonlító cikkeket, toplistákat, áttekintő anyagokat. Válaszolj CSAK a keresési kifejezésekkel, soronként egyet. Semmi más szöveget ne adj.';
-  const prompt = `Téma: ${topic}\n\nKészíts 5-6 keresési kifejezést amik ÖSSZEHASONLÍTÓ CIKKEKET és TELJES LISTÁKAT találnak. NE egy-egy konkrét opciót keress, hanem olyat ami MINDEGYIKET felsorolja vagy összehasonlítja.\n\nKeresési kifejezések:`;
-  return parseQueryLines(await callGemini(prompt, system, { temp: 0.4, maxTokens: 600 })).slice(0, 6);
+  const system = 'Te egy piackutató szakértő vagy. Keresési kulcsszavakat TERVEZEL amikkel megtaláljuk az ÖSSZES elérhető opciót a piacon. NE konkrét opciókat keress, hanem összehasonlító cikkeket, toplistákat, áttekintő anyagokat. ' +
+    'FONTOS: a keresések legyenek TÖBBNYELVŰEK – magyar ÉS angol kifejezések vegyesen (a nemzetközi összehasonlítások és tesztek többnyire angolul vannak fent). ' +
+    'Válaszolj CSAK a keresési kifejezésekkel, soronként egyet. Semmi más szöveget ne adj.';
+  const prompt = `Téma: ${topic}\n\nKészíts 6-8 keresési kifejezést (vegyesen magyar és angol) amik ÖSSZEHASONLÍTÓ CIKKEKET és TELJES LISTÁKAT találnak. NE egy-egy konkrét opciót keress, hanem olyat ami MINDEGYIKET felsorolja vagy összehasonlítja.\n\nKeresési kifejezések:`;
+  return parseQueryLines(await callGemini(prompt, system, { temp: 0.4, maxTokens: 700 })).slice(0, 8);
 }
 
 // FÁZIS 1 eredménye: opciók/márkák kinyerése
@@ -1019,7 +1201,9 @@ async function extractOptions(topic, mappingResults) {
 
 // FÁZIS 2: részletes keresések tervezése az opciókhoz
 async function planDetailSearches(topic, options) {
-  const system = 'Te egy piackutató vagy. Most minden egyes opcióhoz KONKRÉT keresést kell tervezned: ár, elérhetőség, jellemzők, vélemény, teszt. A keresések legyenek SPECIFIKUSAK. Válaszolj CSAK a keresési kifejezésekkel, soronként egyet.';
+  const system = 'Te egy piackutató vagy. Most minden egyes opcióhoz KONKRÉT keresést kell tervezned: ár, elérhetőség, jellemzők, vélemény, teszt. A keresések legyenek SPECIFIKUSAK. ' +
+    'Az ár/elérhetőség keresések legyenek magyarul, a műszaki adatok/tesztek/vélemények keresése ANGOLUL is történjen (pl. "[modell] review", "[modell] specifications"). ' +
+    'Válaszolj CSAK a keresési kifejezésekkel, soronként egyet.';
   const prompt = `Téma: ${topic}\n\nEddig talált opciók:\n${options}\n\nKészíts 6-8 KONKRÉT keresést, amelyek a fenti opciókról részletes adatokat hoznak (ár, vélemény, elérhetőség).\n\nKeresési kifejezések:`;
   return parseQueryLines(await callGemini(prompt, system, { temp: 0.4, maxTokens: 700 })).slice(0, 8);
 }
@@ -1036,37 +1220,67 @@ async function generateExpertAnalysis(topic, allData) {
 
 // EGYSZERŰ MÓD: közvetlen, tényszerű válasz a talált forrásokból
 async function generateSimpleAnswer(topic, data) {
-  const raw = data.slice(0, 12).map(r => r.slice(0, 1200)).join('\n\n---\n\n');
-  const system = 'Hűtéstechnikai szakértő asszisztens vagy. A felhasználó kérdésére adj KONKRÉT, érthető és pontos választ KIZÁRÓLAG a megadott forrásokból. Ne találj ki adatot. Ha valamire nincs információ, írd: "Erről nem találtam megbízható információt". Formátum: tömör magyar Markdown, ahol indokolt felsorolással. Ne erőltess összehasonlító táblázatot, ha a kérdés nem azt kéri.';
+  // FONTOS: a hívók néha EGY nagy összefűzött szöveget adnak át (önálló mélykutatás),
+  // néha több külön forrást. Ezért teljes karakter-keretet használunk, nem per-elem vágást,
+  // különben egyetlen nagy szöveg az első ~1200 karakterre csonkulna (kevés/gyenge válasz).
+  const raw = (Array.isArray(data) ? data : [data]).join('\n\n---\n\n').slice(0, 16000);
+  const system = 'Hűtéstechnikai szakértő asszisztens vagy. A felhasználó kérdésére adj KONKRÉT, érthető és pontos választ KIZÁRÓLAG a megadott forrásokból. Ne találj ki adatot. Ha valamire nincs információ, írd: "Erről nem találtam megbízható információt". ' +
+    'A fontos állításoknál add meg a forrást Markdown linkként, ha a tényeknél szerepel [forrás: URL]. ' +
+    'Formátum: tömör magyar Markdown, ahol indokolt felsorolással. Ne erőltess összehasonlító táblázatot, ha a kérdés nem azt kéri.';
   const prompt = `Kérdés/téma: ${topic}\n\nTalált források:\n${raw}\n\nVálaszolj a kérdésre a források alapján, lényegre törően.`;
-  return await callGemini(prompt, system, { temp: 0.3, maxTokens: 2500 });
+  return await callGemini(prompt, system, { temp: 0.3, maxTokens: 3500 });
 }
 
 // ===== AUTONÓM MÉLYKUTATÁS (Plan → Search → Reflect → Write) =====
 
 // Kezdő keresési kérdések tervezése
 async function planInitialQueries(topic) {
-  const system = 'Kutatástervező vagy. A felhasználó témájához készíts 3-4 kezdő keresési kifejezést, amik a legfontosabb alapinformációkat hozzák. Válaszolj CSAK a keresési kifejezésekkel, soronként egyet, semmi más szöveget.';
-  const prompt = `Téma: ${topic}\n\nKezdő keresési kifejezések:`;
-  return parseQueryLines(await callGemini(prompt, system, { temp: 0.4, maxTokens: 400 })).slice(0, 4);
+  const system = 'Kutatástervező vagy. A felhasználó témájához készíts 5-6 kezdő keresési kifejezést, amik a legfontosabb alapinformációkat hozzák. ' +
+    'FONTOS: a keresések legyenek TÖBBNYELVŰEK – kb. fele magyar, fele ANGOL nyelvű (a műszaki anyagok többsége angolul érhető el). ' +
+    'Ha a témához releváns (pl. európai gyártók), 1 keresés lehet NÉMET is. ' +
+    'Válaszolj CSAK a keresési kifejezésekkel, soronként egyet, semmi más szöveget.';
+  const prompt = `Téma: ${topic}\n\nKezdő keresési kifejezések (vegyesen magyar és angol):`;
+  return parseQueryLines(await callGemini(prompt, system, { temp: 0.4, maxTokens: 500 })).slice(0, 6);
 }
 
 // Egy kör nyers adatának tömörítése tényekké (a kontextus kordában tartására)
 async function condenseFacts(topic, roundText) {
-  const system = 'Tömörítsd a forrásokból a témához kapcsolódó KONKRÉT TÉNYEKET rövid felsorolásba: nevek, árak, adatok, jellemzők, fontos állítások. Csak tények, magyarázat nélkül. Ami nem kapcsolódik a témához, hagyd ki.';
-  const prompt = `Téma: ${topic}\n\nForrások:\n${roundText.slice(0, 8000)}\n\nTények:`;
-  return await callGemini(prompt, system, { temp: 0.1, maxTokens: 1200 });
+  const system = 'Tömörítsd a forrásokból a témához kapcsolódó KONKRÉT TÉNYEKET rövid felsorolásba: nevek, árak, adatok, jellemzők, fontos állítások. ' +
+    'A tényeket MAGYARUL írd, akkor is, ha a forrás angol/német/más nyelvű. ' +
+    'Minden tény végére írd oda a forrás URL-jét így: [forrás: URL]. ' +
+    'Csak tények, magyarázat nélkül. Ami nem kapcsolódik a témához, hagyd ki.';
+  const prompt = `Téma: ${topic}\n\nForrások:\n${roundText.slice(0, 14000)}\n\nTények (mindegyik végén [forrás: URL]):`;
+  return await callGemini(prompt, system, { temp: 0.1, maxTokens: 2000 });
 }
 
 // Önreflexió: elég-e az eddigi adat? Ha nem, új kereséseket javasol
 // Visszaad: { done: bool, queries: [] }
 async function reflectGaps(topic, factsSoFar, round) {
-  const system = 'Kutatási minőség-ellenőr vagy. Megkapod a témát és az eddig összegyűjtött tényeket. Döntsd el, elég-e ez a téma ALAPOS megválaszolásához. Ha IGEN, válaszolj pontosan ennyivel: KÉSZ. Ha NEM, sorold fel 2-4 ÚJ, célzott keresési kifejezést, amik a HIÁNYZÓ információt pótolják (soronként egy, semmi más szöveg).';
+  const system = 'Kutatási minőség-ellenőr vagy. Megkapod a témát és az eddig összegyűjtött tényeket. Döntsd el, elég-e ez a téma ALAPOS megválaszolásához. Ha IGEN, válaszolj pontosan ennyivel: KÉSZ. Ha NEM, sorold fel 2-4 ÚJ, célzott keresési kifejezést, amik a HIÁNYZÓ információt pótolják (soronként egy, semmi más szöveg). ' +
+    'NYELVI STRATÉGIA: ha a magyar keresések nem hoztak elég adatot, az új keresések legyenek ANGOLUL (műszaki adatok, tesztek) vagy NÉMETÜL (európai gyártók). ' +
+    'Kínai gyártó termékénél ANGOLUL keress (az export-anyagaik angolul vannak fent); kínai nyelvű keresést csak végső esetben javasolj, ha angolul sem található adat.';
   const prompt = `Téma: ${topic}\n\nEddigi tények:\n${factsSoFar.slice(0, 9000)}\n\nElég ez? Ha igen: KÉSZ. Ha nem: új keresések:`;
   const out = await callGemini(prompt, system, { temp: 0.3, maxTokens: 400 });
   if (/^\s*KÉSZ\s*$/i.test(out) || /\bKÉSZ\b/i.test(out.split('\n')[0] || '')) return { done: true, queries: [] };
   const queries = parseQueryLines(out).filter(q => !/^kész$/i.test(q)).slice(0, 4);
   return { done: queries.length === 0, queries };
+}
+
+// HIBRID: a Gemini beépített Google-keresése (grounding) kiegészíti a Tavily találatokat.
+// A Google sok olyat talál (PDF árlisták, fórumok), amit a Tavily nem – és fordítva.
+async function groundedRoundFacts(topic, queries) {
+  try {
+    const system = 'Piackutató asszisztens vagy, aki a Google keresőt használja. KIZÁRÓLAG a Google találatokból dolgozz, ne találj ki adatot. ' +
+      'Gyűjts KONKRÉT tényeket: nevek, modellek, árak, műszaki adatok. Bármilyen nyelvű forrás jó, de a tényeket MAGYARUL írd. ' +
+      'Tömör felsorolás, minden tény után a forrás URL így: [forrás: URL].';
+    const prompt = `Téma: ${topic}\n\nKeresendő kérdések:\n${queries.map(q => '- ' + q).join('\n')}\n\nGyűjtsd össze a Google találatokból a konkrét tényeket:`;
+    const { text, sources } = await callGeminiGrounded(prompt, system, { temp: 0.2, maxTokens: 2000 });
+    if (!text) return '';
+    let out = `**Google Search (grounding) találatok:**\n${text}`;
+    if (sources && sources.length) out += `\n\nForrások:\n${sources.map(s => `- ${s.title}: ${s.url}`).join('\n')}`;
+    log('    🌐 Google grounding kiegészítés kész', 'info');
+    return out;
+  } catch (e) { log(`    ⚠️ Grounding kihagyva: ${e.message}`, 'warn'); return ''; }
 }
 
 // Az autonóm hurok fő logikája
@@ -1081,26 +1295,33 @@ async function runAutonomousResearch(topic, huOnly, maxRounds) {
   if (!queries.length) queries = [topic];
 
   for (let round = 1; round <= maxRounds; round++) {
+    if (stopResearchRequested) { log('  ⏹️ Kérésre leállítva – válasz írása az eddigi adatokból.', 'warn'); break; }
     log(`\n  🔄 ${round}. kör – keresések:`, 'info');
-    const roundChunks = [];
-    for (const q of queries) {
+    const newQueries = queries.filter(q => {
       const key = q.toLowerCase().trim();
-      if (seenQueries.has(key)) continue;
+      if (seenQueries.has(key)) return false;
       seenQueries.add(key);
-      log(`    🔎 ${q}`, 'info');
-      const r = await browseQuery(q, huOnly, 4);
-      if (r) roundChunks.push(r);
-    }
+      return true;
+    });
+    newQueries.forEach(q => log(`    🔎 ${q}`, 'info'));
+    // PÁRHUZAMOS végrehajtás: a kör összes keresése + a Google grounding EGYSZERRE fut
+    const tasks = newQueries.map(q => browseQuery(q, huOnly, 6).catch(() => ''));
+    if (newQueries.length) tasks.push(groundedRoundFacts(topic, newQueries));
+    const roundChunks = (await Promise.all(tasks)).filter(Boolean);
     setProgress(Math.min(15 + round * Math.round(70 / maxRounds), 85));
 
     if (roundChunks.length) {
       log('    🧠 Adatok tömörítése...', 'info');
       const facts = await condenseFacts(topic, roundChunks.join('\n\n---\n\n'));
-      if (facts) factsParts.push(`### ${round}. kör\n${facts}`);
+      if (facts) {
+        factsParts.push(`### ${round}. kör\n${facts}`);
+        updateLiveResearch(factsParts.join('\n\n'));
+      }
     } else if (!factsParts.length && round === 1) {
       throw new Error('Nem találtam forrásokat. Ellenőrizd a Tavily kulcsot vagy az internetkapcsolatot.');
     }
 
+    if (stopResearchRequested) { log('  ⏹️ Kérésre leállítva – válasz írása az eddigi adatokból.', 'warn'); break; }
     if (round >= maxRounds) { log('  ⏹️ Elértem a max. körszámot.', 'warn'); break; }
 
     // Önreflexió: van-e még hiány?
@@ -1111,6 +1332,8 @@ async function runAutonomousResearch(topic, huOnly, maxRounds) {
     queries = newQ;
     log(`    ➕ Új irányok: ${queries.join(' | ')}`, 'info');
   }
+
+  if (!factsParts.length) throw new Error('Nem gyűlt össze adat – próbáld újra.');
 
   log('  💡 Végső válasz összeállítása...', 'info');
   setProgress(90);
@@ -1124,6 +1347,11 @@ async function runResearch() {
   const huOnly = document.getElementById('research-hu').checked;
   const depth = document.getElementById('research-depth').value;
 
+  // Új kutatás → tiszta lap a "már látott oldalak" memóriának és a leállítás-jelzőnek
+  researchSeenUrls.clear();
+  stopResearchRequested = false;
+  hideLiveResearch();
+
   // A Tavily háttér csak akkor kell, ha NEM a magyar Grounding módban vagyunk.
   // Grounding esetén a Gemini maga keres a Google-ben (a böngészőben is működik).
   if (!huOnly) {
@@ -1135,6 +1363,9 @@ async function runResearch() {
   }
   const btn = document.getElementById('research-btn');
   btn.disabled = true;
+  // A leállítás gomb csak az önálló mélykutatásnál értelmezhető
+  const stopBtn = document.getElementById('research-stop-btn');
+  if (stopBtn) stopBtn.style.display = (!huOnly && depth === 'autonomous') ? 'inline-block' : 'none';
   document.getElementById('research-result').style.display = 'none';
   setProgress(0);
   try {
@@ -1176,13 +1407,11 @@ async function runResearch() {
     log('  📡 1. fázis: piacfeltérképezés...', 'info');
     const mapQueries = await planMarketMapping(topic);
     mapQueries.forEach(q => log(`    • ${q}`, 'info'));
+    // PÁRHUZAMOS: az összes feltérképező keresés egyszerre fut
     const mappingResults = [];
-    for (let i = 0; i < mapQueries.length; i++) {
-      log(`  🔎 [${i + 1}/${mapQueries.length}] ${mapQueries[i]}`, 'info');
-      const r = await browseQuery(mapQueries[i], huOnly, 4);
-      if (r) { mappingResults.push(r); allData.push(r); }
-      setProgress(Math.round(((i + 1) / mapQueries.length) * 30));
-    }
+    const mapChunks = await Promise.all(mapQueries.map(q => browseQuery(q, huOnly, 4).catch(() => '')));
+    mapChunks.forEach(r => { if (r) { mappingResults.push(r); allData.push(r); } });
+    setProgress(30);
     if (!mappingResults.length) {
       throw new Error('Nem sikerült forrásokat gyűjteni. Ellenőrizd a Tavily kulcsot vagy az internetkapcsolatot.');
     }
@@ -1193,12 +1422,10 @@ async function runResearch() {
       log('  🔎 2. fázis: részletes adatgyűjtés...', 'info');
       const detailQueries = await planDetailSearches(topic, options);
       detailQueries.forEach(q => log(`    • ${q}`, 'info'));
-      for (let i = 0; i < detailQueries.length; i++) {
-        log(`  🔎 [${i + 1}/${detailQueries.length}] ${detailQueries[i]}`, 'info');
-        const r = await browseQuery(detailQueries[i], huOnly, 4);
-        if (r) allData.push(r);
-        setProgress(30 + Math.round(((i + 1) / detailQueries.length) * 45));
-      }
+      // PÁRHUZAMOS: a részletes keresések is egyszerre futnak
+      const detailChunks = await Promise.all(detailQueries.map(q => browseQuery(q, huOnly, 4).catch(() => '')));
+      detailChunks.forEach(r => { if (r) allData.push(r); });
+      setProgress(75);
     }
 
     log('  💡 Elemzés és összefoglaló készítése...', 'info');
@@ -1209,6 +1436,7 @@ async function runResearch() {
     if (e.message !== 'QUOTA_EXCEEDED' && e.message !== 'AUTH_ERROR') log(`✗ Hiba: ${e.message}`, 'err');
   } finally {
     btn.disabled = false;
+    if (stopBtn) stopBtn.style.display = 'none';
   }
 }
 
@@ -1219,8 +1447,154 @@ function finishResearch(topic, summary, count) {
   lastResearch = { topic, markdown };
   document.getElementById('research-output').value = markdown;
   document.getElementById('research-result').style.display = 'block';
+
+  // Beszélgetős folytatás kontextusának előkészítése
+  const huOnly = document.getElementById('research-hu').checked;
+  researchContext = { topic, huOnly, contextText: summary, conversation: [] };
+  const chatLog = document.getElementById('research-chat-log');
+  if (chatLog) chatLog.innerHTML = '';
+  appendChat('ai', 'Kész az összefoglaló. Kérdezz rá bármire (pl. ár, garancia, magyar szerviz), és célzottan keresek tovább a meglévő eredményre építve.');
+
+  // Mentés az előzményekbe + az élő részeredmények elrejtése (már a kész eredmény látszik)
+  saveResearchHistory(topic, markdown, huOnly);
+  hideLiveResearch();
+
   setProgress(100);
-  log('✅ Kész. Ellenőrizd az összefoglalót, majd töltsd fel a tudásbázisba.', 'ok');
+  log('✅ Kész. Ellenőrizd az összefoglalót, kérdezz tovább a beszélgetésben, vagy töltsd fel a tudásbázisba.', 'ok');
+}
+
+// Chat szöveg → biztonságos HTML: Markdown linkek és csupasz URL-ek kattinthatóvá tétele
+function renderChatHtml(text) {
+  let s = escHtml(text);
+  // Markdown linkek: [címke](url)
+  s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
+    '<a href="$2" target="_blank" rel="noopener" style="color:#93c5fd;word-break:break-all;">$1</a>');
+  // Csupasz URL-ek (amik még nincsenek linkben – a href="..."-t a megelőző idézőjel kizárja)
+  s = s.replace(/(^|[\s(])(https?:\/\/[^\s<)]+)/g,
+    '$1<a href="$2" target="_blank" rel="noopener" style="color:#93c5fd;word-break:break-all;">$2</a>');
+  return s;
+}
+
+// Egy üzenet hozzáadása a beszélgetés-felülethez (user vagy ai)
+function appendChat(role, text) {
+  const box = document.getElementById('research-chat-log');
+  if (!box) return;
+  const bubble = document.createElement('div');
+  const isUser = role === 'user';
+  bubble.style.cssText =
+    'max-width:88%;padding:8px 10px;border-radius:10px;font-size:13px;line-height:1.45;white-space:pre-wrap;' +
+    (isUser
+      ? 'align-self:flex-end;background:#1d4ed8;color:#fff;'
+      : 'align-self:flex-start;background:#1e293b;border:1px solid #334155;color:#e2e8f0;');
+  // A felhasználó üzenete sima szöveg, az AI válaszban a linkek kattinthatóak
+  if (isUser) {
+    bubble.textContent = '🙋 ' + text;
+  } else {
+    bubble.innerHTML = '🤖 ' + renderChatHtml(text);
+  }
+  box.appendChild(bubble);
+  box.scrollTop = box.scrollHeight;
+}
+
+// A beszélgetés Q&A-ját hozzáfűzi a kutatási kimenethez (a feltöltés is tartalmazza)
+function appendToResearchOutput(question, answer) {
+  const out = document.getElementById('research-output');
+  if (!out) return;
+  const addition = `\n\n---\n\n## Folytatás: ${question}\n\n${answer}\n`;
+  out.value += addition;
+  if (lastResearch) {
+    lastResearch.markdown = out.value;
+    // A folytatással bővült kutatást is mentjük az előzményekbe
+    saveResearchHistory(lastResearch.topic, lastResearch.markdown, researchContext && researchContext.huOnly);
+  }
+}
+
+// Célzott keresési kérdések tervezése a folytatáshoz (a meglévő tudásra építve)
+async function planFollowUpQueries(topic, contextText, question) {
+  const system = 'Kutatástervező vagy. A felhasználó egy már lefutott kutatás után FÓKUSZÁLT kérdést tett fel. ' +
+    'Tervezz 2-3 célzott keresési kifejezést, amik KIFEJEZETTEN erre a kérdésre hoznak ÚJ információt. ' +
+    'Legalább egy keresés legyen ANGOL nyelvű is, ha a kérdés műszaki adatra/tesztre vonatkozik. ' +
+    'Ne ismételd az általános témát, a konkrét hiányra fókuszálj. Válaszolj CSAK a keresési kifejezésekkel, soronként egyet.';
+  const prompt = `Téma: ${topic}\n\nEddig tudjuk:\n${(contextText || '').slice(0, 3000)}\n\nA felhasználó új kérdése: ${question}\n\nCélzott keresési kifejezések:`;
+  return parseQueryLines(await callGemini(prompt, system, { temp: 0.4, maxTokens: 300 })).slice(0, 3);
+}
+
+// Válasz a folytatás-kérdésre az eddigi kutatás + frissen talált tények alapján
+async function answerFollowUp(topic, contextText, conversation, question, newFacts) {
+  const history = (conversation || []).slice(-3)
+    .map(t => `K: ${t.q}\nV: ${t.a}`).join('\n\n');
+  const system = 'Szakértő kutató asszisztens vagy. A felhasználóval FOLYAMATOS beszélgetésben pontosítjátok a kutatást. ' +
+    'Válaszolj a FÓKUSZÁLT kérdésre KONKRÉTAN, az eddigi összefoglaló és a frissen talált tények alapján. ' +
+    'Ne ismételd feleslegesen a korábbi összefoglalót, a kérdésre válaszolj. Ha valamire nincs adat, írd: ' +
+    '"Erről nem találtam megbízható információt". Formátum: tömör magyar Markdown, konkrét számokkal/nevekkel.';
+  const prompt = `Téma: ${topic}\n\nEddigi kutatás összefoglalója:\n${(contextText || '').slice(0, 4000)}\n\n` +
+    (newFacts ? `Frissen talált tények (a mostani kérdéshez):\n${newFacts}\n\n` : '') +
+    (history ? `Eddigi beszélgetés:\n${history}\n\n` : '') +
+    `A felhasználó mostani kérdése: ${question}\n\nVálaszolj konkrétan, lényegre törően:`;
+  return await callGemini(prompt, system, { temp: 0.3, maxTokens: 2500 });
+}
+
+// A beszélgetős folytatás fő logikája
+async function askFollowUp() {
+  if (!researchContext) { log('⚠️ Előbb futtass egy kutatást!', 'warn'); return; }
+  const inp = document.getElementById('research-followup');
+  const question = (inp && inp.value.trim()) || '';
+  if (!question) { log('⚠️ Írd be a kérdésed a folytatáshoz!', 'warn'); return; }
+  const btn = document.getElementById('followup-btn');
+  if (btn) btn.disabled = true;
+  appendChat('user', question);
+  if (inp) inp.value = '';
+  setProgress(0);
+  try {
+    const ctx = researchContext;
+    let answer;
+
+    if (ctx.huOnly) {
+      // Magyar Grounding folytatás: a Gemini maga keres tovább a Google-ben, az eddigi kontextusban
+      log(`\n💬 Folytatás (magyar grounding): ${question}`, 'info');
+      setProgress(40);
+      const system = 'Magyar piackutató szakértő vagy, aki a Google keresőt használja. Egy már lefutott kutatás ' +
+        'FOLYTATÁSAként a felhasználó fókuszált kérdésére válaszolsz. KIZÁRÓLAG a Google találatokból dolgozz, ' +
+        'részesítsd előnyben a magyar (.hu) forrásokat, keress konkrét árakat/adatokat. Tömör magyar Markdown.';
+      const prompt = `Téma: ${ctx.topic}\n\nEddigi kutatás összefoglalója:\n${(ctx.contextText || '').slice(0, 4000)}\n\n` +
+        `A felhasználó mostani fókuszált kérdése: ${question}\n\nVálaszolj konkrétan a Google találatok alapján:`;
+      const { text, sources } = await callGeminiGrounded(prompt, system, { temp: 0.3, maxTokens: 3000 });
+      if (!text) throw new Error('A Gemini Grounding nem adott vissza választ.');
+      answer = text;
+      if (sources && sources.length) {
+        answer += `\n\n**Felhasznált források:**\n${sources.map(s => `- [${s.title}](${s.url})`).join('\n')}`;
+      }
+      ctx.contextText += `\n\n[Folytatás: ${question}]\n${text}`;
+    } else {
+      // Célzott új keresések a kérdés alapján (a már látott oldalakat kihagyjuk → ÚJ infó)
+      log(`\n💬 Folytatás: ${question}`, 'info');
+      const queries = await planFollowUpQueries(ctx.topic, ctx.contextText, question);
+      queries.forEach(q => log(`    • ${q}`, 'info'));
+      // PÁRHUZAMOS: a folytatás célzott keresései egyszerre futnak
+      const chunks = (await Promise.all(queries.map(q => browseQuery(q, ctx.huOnly, 4).catch(() => '')))).filter(Boolean);
+      setProgress(60);
+      let newFacts = '';
+      if (chunks.length) {
+        log('  🧠 Új tények kivonása...', 'info');
+        newFacts = await condenseFacts(ctx.topic, chunks.join('\n\n---\n\n'));
+      } else {
+        log('  ℹ️ Nem találtam új forrást – a meglévő tudás alapján válaszolok.', 'info');
+      }
+      setProgress(80);
+      answer = await answerFollowUp(ctx.topic, ctx.contextText, ctx.conversation, question, newFacts);
+      if (newFacts) ctx.contextText += `\n\n[Folytatás: ${question}]\n${newFacts}`;
+    }
+
+    appendChat('ai', answer);
+    ctx.conversation.push({ q: question, a: answer });
+    appendToResearchOutput(question, answer);
+    setProgress(100);
+    log('✅ Folytatás kész.', 'ok');
+  } catch (e) {
+    if (e.message !== 'QUOTA_EXCEEDED' && e.message !== 'AUTH_ERROR') log(`✗ Hiba: ${e.message}`, 'err');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 
 async function uploadResearch() {
