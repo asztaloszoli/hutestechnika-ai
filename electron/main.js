@@ -25,12 +25,20 @@ function createWindow() {
   win.loadFile(path.join(ROOT, 'start.html'));
 
   // Külső http(s) linkek az alapértelmezett böngészőben nyíljanak (ne az appban)
-  win.webContents.setWindowOpenHandler(({ url }) => {
+  const linkHandler = ({ url }) => {
     if (/^https?:\/\//i.test(url)) {
       shell.openExternal(url);
       return { action: 'deny' };
     }
     return { action: 'allow' };
+  };
+  win.webContents.setWindowOpenHandler(linkHandler);
+
+  // Az app által nyitott gyerekablakok (pl. a kutatási eredmény olvasó ablaka):
+  // ott se legyen menüsor, és a linkek onnan is a rendes böngészőben nyíljanak.
+  win.webContents.on('did-create-window', (child) => {
+    child.setMenuBarVisibility(false);
+    child.webContents.setWindowOpenHandler(linkHandler);
   });
 }
 

@@ -272,6 +272,9 @@ textarea { resize: vertical; min-height: 120px; font-family: inherit; font-size:
       <label style="display:flex;align-items:center;gap:6px;">
         <input type="checkbox" id="research-hu" /> Magyar piac (Google Search) – pl. árak, importőrök
       </label>
+      <label style="display:flex;align-items:center;gap:6px;" title="Kínai nyelvű keresőszavakat is készít, így kínai gyártói oldalakat is megtalál. A választ magyarul kapod.">
+        <input type="checkbox" id="research-cn" /> Kínai források is (kínai keresőszavak)
+      </label>
       <label style="display:flex;align-items:center;gap:6px;">
         Mélység:
         <select id="research-depth" style="width:auto;min-width:160px;">
@@ -309,6 +312,7 @@ textarea { resize: vertical; min-height: 120px; font-family: inherit; font-size:
     <div id="research-result" style="display:none;margin-top:10px;">
       <textarea id="research-output" rows="12" style="width:100%;font-family:monospace;font-size:12px;"></textarea>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+        <button class="btn" onclick="openResultWindow()" title="Az eredmény olvashatóan, külön ablakban, a teljes képernyő-magasságot kihasználva">🗔 Olvasó ablak</button>
         <button class="btn" onclick="uploadResearch()">⬆️ Feltöltés a tudásbázisba</button>
         <button class="btn secondary" onclick="downloadResearch()">💾 Letöltés .md fájlként</button>
       </div>
@@ -869,6 +873,8 @@ function loadResearchFromHistory() {
   document.getElementById('research-topic').value = item.topic;
   document.getElementById('research-output').value = item.markdown;
   document.getElementById('research-result').style.display = 'block';
+  // Betöltéskor az olvasó ablak is a betöltött kutatást mutassa (ha nyitva van)
+  refreshResultWindow();
   lastResearch = { topic: item.topic, markdown: item.markdown };
   researchContext = { topic: item.topic, huOnly: !!item.huOnly, contextText: item.markdown, conversation: [] };
   const chatLog = document.getElementById('research-chat-log');
@@ -1055,7 +1061,14 @@ async function runGroundedResearch(topic) {
 function parseQueryLines(text) {
   return text.split('\n')
     .map(l => l.trim().replace(/^[-•\d.\s]+/, '').trim())
-    .filter(l => l.length > 5);
+    // A kínai keresőszavak írásjelekben rövidek is lehetnek, azokat is átengedjük
+    .filter(l => l.length > 5 || (/[\u4e00-\u9fff]/.test(l) && l.length > 1));
+}
+
+// Be van-e kapcsolva a "Kínai források is" pipa
+function isChineseResearchOn() {
+  const el = document.getElementById('research-cn');
+  return !!(el && el.checked);
 }
 
 // Igaz, ha van bármilyen háttér-keresési lehetőség (asztali app)
@@ -1186,9 +1199,11 @@ async function browseQuery(query, huOnly, maxUrls = 4) {
 async function planMarketMapping(topic) {
   const system = 'Te egy piackutató szakértő vagy. Keresési kulcsszavakat TERVEZEL amikkel megtaláljuk az ÖSSZES elérhető opciót a piacon. NE konkrét opciókat keress, hanem összehasonlító cikkeket, toplistákat, áttekintő anyagokat. ' +
     'FONTOS: a keresések legyenek TÖBBNYELVŰEK – magyar ÉS angol kifejezések vegyesen (a nemzetközi összehasonlítások és tesztek többnyire angolul vannak fent). ' +
+    (isChineseResearchOn() ? 'A felhasználó kínai forrásokat is kér: 2 keresés legyen EGYSZERŰSÍTETT KÍNAI nyelven (a kínai gyártói/nagykereskedelmi oldalak megtalálásához). ' : '') +
     'Válaszolj CSAK a keresési kifejezésekkel, soronként egyet. Semmi más szöveget ne adj.';
-  const prompt = `Téma: ${topic}\n\nKészíts 6-8 keresési kifejezést (vegyesen magyar és angol) amik ÖSSZEHASONLÍTÓ CIKKEKET és TELJES LISTÁKAT találnak. NE egy-egy konkrét opciót keress, hanem olyat ami MINDEGYIKET felsorolja vagy összehasonlítja.\n\nKeresési kifejezések:`;
-  return parseQueryLines(await callGemini(prompt, system, { temp: 0.4, maxTokens: 700 })).slice(0, 8);
+  const cnPlan = isChineseResearchOn();
+  const prompt = `Téma: ${topic}\n\nKészíts ${cnPlan ? '8-10' : '6-8'} keresési kifejezést (vegyesen magyar és angol${cnPlan ? ', plusz 2 kínai' : ''}) amik ÖSSZEHASONLÍTÓ CIKKEKET és TELJES LISTÁKAT találnak. NE egy-egy konkrét opciót keress, hanem olyat ami MINDEGYIKET felsorolja vagy összehasonlítja.\n\nKeresési kifejezések:`;
+  return parseQueryLines(await callGemini(prompt, system, { temp: 0.4, maxTokens: 700 })).slice(0, cnPlan ? 10 : 8);
 }
 
 // FÁZIS 1 eredménye: opciók/márkák kinyerése
@@ -1238,15 +1253,17 @@ async function planInitialQueries(topic) {
   const system = 'Kutatástervező vagy. A felhasználó témájához készíts 5-6 kezdő keresési kifejezést, amik a legfontosabb alapinformációkat hozzák. ' +
     'FONTOS: a keresések legyenek TÖBBNYELVŰEK – kb. fele magyar, fele ANGOL nyelvű (a műszaki anyagok többsége angolul érhető el). ' +
     'Ha a témához releváns (pl. európai gyártók), 1 keresés lehet NÉMET is. ' +
+    (isChineseResearchOn() ? 'A felhasználó kínai forrásokat is kér: 2 keresés legyen EGYSZERŰSÍTETT KÍNAI nyelven (kínai gyártói adatlapok, specifikációk megtalálásához). ' : '') +
     'Válaszolj CSAK a keresési kifejezésekkel, soronként egyet, semmi más szöveget.';
-  const prompt = `Téma: ${topic}\n\nKezdő keresési kifejezések (vegyesen magyar és angol):`;
-  return parseQueryLines(await callGemini(prompt, system, { temp: 0.4, maxTokens: 500 })).slice(0, 6);
+  const cnPlan = isChineseResearchOn();
+  const prompt = `Téma: ${topic}\n\nKezdő keresési kifejezések (vegyesen magyar és angol${cnPlan ? ', plusz 2 kínai' : ''}):`;
+  return parseQueryLines(await callGemini(prompt, system, { temp: 0.4, maxTokens: 500 })).slice(0, cnPlan ? 8 : 6);
 }
 
 // Egy kör nyers adatának tömörítése tényekké (a kontextus kordában tartására)
 async function condenseFacts(topic, roundText) {
   const system = 'Tömörítsd a forrásokból a témához kapcsolódó KONKRÉT TÉNYEKET rövid felsorolásba: nevek, árak, adatok, jellemzők, fontos állítások. ' +
-    'A tényeket MAGYARUL írd, akkor is, ha a forrás angol/német/más nyelvű. ' +
+    'A tényeket MAGYARUL írd, akkor is, ha a forrás angol/német/kínai/más nyelvű. ' +
     'Minden tény végére írd oda a forrás URL-jét így: [forrás: URL]. ' +
     'Csak tények, magyarázat nélkül. Ami nem kapcsolódik a témához, hagyd ki.';
   const prompt = `Téma: ${topic}\n\nForrások:\n${roundText.slice(0, 14000)}\n\nTények (mindegyik végén [forrás: URL]):`;
@@ -1258,7 +1275,9 @@ async function condenseFacts(topic, roundText) {
 async function reflectGaps(topic, factsSoFar, round) {
   const system = 'Kutatási minőség-ellenőr vagy. Megkapod a témát és az eddig összegyűjtött tényeket. Döntsd el, elég-e ez a téma ALAPOS megválaszolásához. Ha IGEN, válaszolj pontosan ennyivel: KÉSZ. Ha NEM, sorold fel 2-4 ÚJ, célzott keresési kifejezést, amik a HIÁNYZÓ információt pótolják (soronként egy, semmi más szöveg). ' +
     'NYELVI STRATÉGIA: ha a magyar keresések nem hoztak elég adatot, az új keresések legyenek ANGOLUL (műszaki adatok, tesztek) vagy NÉMETÜL (európai gyártók). ' +
-    'Kínai gyártó termékénél ANGOLUL keress (az export-anyagaik angolul vannak fent); kínai nyelvű keresést csak végső esetben javasolj, ha angolul sem található adat.';
+    (isChineseResearchOn()
+      ? 'A felhasználó kínai forrásokat is kér: kínai gyártó termékénél nyugodtan javasolj EGYSZERŰSÍTETT KÍNAI nyelvű keresést is (gyártói adatlapok, hazai piaci infók).'
+      : 'Kínai gyártó termékénél ANGOLUL keress (az export-anyagaik angolul vannak fent); kínai nyelvű keresést csak végső esetben javasolj, ha angolul sem található adat.');
   const prompt = `Téma: ${topic}\n\nEddigi tények:\n${factsSoFar.slice(0, 9000)}\n\nElég ez? Ha igen: KÉSZ. Ha nem: új keresések:`;
   const out = await callGemini(prompt, system, { temp: 0.3, maxTokens: 400 });
   if (/^\s*KÉSZ\s*$/i.test(out) || /\bKÉSZ\b/i.test(out.split('\n')[0] || '')) return { done: true, queries: [] };
@@ -1383,7 +1402,27 @@ async function runResearch() {
     if (depth === 'simple') {
       // ── EGYSZERŰ KERESÉS: egy keresés a témára + közvetlen válasz ──
       log(`\n🔎 Egyszerű keresés: ${topic}`, 'info');
-      const data = await browseQuery(topic, huOnly, 6);
+      let data;
+      if (isChineseResearchOn()) {
+        // Kínai mód: a Gemini lefordítja a témát kínai keresőkifejezéssé,
+        // és a magyar/eredeti keresés MELLETT kínaiul is keresünk párhuzamosan.
+        log('  🇨🇳 Kínai keresőszó készítése...', 'info');
+        let cnQuery = '';
+        try {
+          cnQuery = (await callGemini(
+            `Fogalmazd meg az alábbi témát EGYSZERŰSÍTETT KÍNAI nyelvű webes keresőkifejezésként. Csak a kínai keresőkifejezést add vissza, semmi mást.\n\nTéma: ${topic}`,
+            null, { temp: 0.2, maxTokens: 100 }
+          )).trim().split('\n')[0];
+        } catch (e) { log(`    ⚠️ Kínai keresőszó kihagyva: ${e.message}`, 'warn'); }
+        if (cnQuery) log(`    🔎 ${cnQuery}`, 'info');
+        const [dMain, dCn] = await Promise.all([
+          browseQuery(topic, huOnly, 6),
+          cnQuery ? browseQuery(cnQuery, false, 4).catch(() => '') : Promise.resolve(''),
+        ]);
+        data = [dMain, dCn].filter(Boolean).join('\n\n---\n\n');
+      } else {
+        data = await browseQuery(topic, huOnly, 6);
+      }
       if (!data) throw new Error('Nem találtam forrásokat. Ellenőrizd a Tavily kulcsot vagy az internetkapcsolatot.');
       setProgress(60);
       log('  💡 Válasz összeállítása...', 'info');
@@ -1448,6 +1487,9 @@ function finishResearch(topic, summary, count) {
   document.getElementById('research-output').value = markdown;
   document.getElementById('research-result').style.display = 'block';
 
+  // Az olvasható, formázott eredmény automatikus megnyitása külön ablakban
+  openResultWindow();
+
   // Beszélgetős folytatás kontextusának előkészítése
   const huOnly = document.getElementById('research-hu').checked;
   researchContext = { topic, huOnly, contextText: summary, conversation: [] };
@@ -1461,6 +1503,103 @@ function finishResearch(topic, summary, count) {
 
   setProgress(100);
   log('✅ Kész. Ellenőrizd az összefoglalót, kérdezz tovább a beszélgetésben, vagy töltsd fel a tudásbázisba.', 'ok');
+}
+
+// ===== EREDMÉNY OLVASÓ ABLAK: a kutatási Markdown szépen formázva, külön ablakban =====
+
+// Sorok BELSEJÉNEK formázása: linkek, félkövér, kód
+function mdInline(t) {
+  let s = escHtml(t);
+  s = s.replace(/\[([^\]]*)\]\((https?:\/\/[^\s)]+)\)/g,
+    (m, label, url) => `<a href="${url}" target="_blank" rel="noopener">${label || url}</a>`);
+  s = s.replace(/(^|[\s(\[])((https?:\/\/)[^\s<>)"']+)/g,
+    '$1<a href="$2" target="_blank" rel="noopener">$2</a>');
+  s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+  return s;
+}
+
+// Egyszerű Markdown → HTML átalakító (címsorok, listák, táblázatok, elválasztók)
+function renderMarkdownHtml(md) {
+  const lines = String(md || '').replace(/\r/g, '').split('\n');
+  const out = [];
+  let listLevel = 0;
+  let inTable = false;
+  const closeList = (to = 0) => { while (listLevel > to) { out.push('</ul>'); listLevel--; } };
+  const closeTable = () => { if (inTable) { out.push('</table>'); inTable = false; } };
+  for (const line of lines) {
+    const t = line.trim();
+    if (!t) { closeList(); closeTable(); continue; }
+    // Táblázat sorok: | cella | cella |
+    if (/^\|.*\|$/.test(t)) {
+      closeList();
+      if (/^\|[\s:|-]+\|$/.test(t)) continue; // fejléc-elválasztó sor kihagyása
+      const cells = t.slice(1, -1).split('|').map(c => mdInline(c.trim()));
+      if (!inTable) {
+        out.push('<table>');
+        inTable = true;
+        out.push('<tr>' + cells.map(c => `<th>${c}</th>`).join('') + '</tr>');
+      } else {
+        out.push('<tr>' + cells.map(c => `<td>${c}</td>`).join('') + '</tr>');
+      }
+      continue;
+    }
+    closeTable();
+    // Címsorok: #, ##, ###, ####
+    const h = t.match(/^(#{1,4})\s+(.*)$/);
+    if (h) { closeList(); out.push(`<h${h[1].length}>${mdInline(h[2])}</h${h[1].length}>`); continue; }
+    // Elválasztó vonal
+    if (/^(-{3,}|\*{3,})$/.test(t)) { closeList(); out.push('<hr>'); continue; }
+    // Lista elemek (behúzás szerint alpontok)
+    const li = line.match(/^(\s*)[-*•]\s+(.*)$/);
+    if (li) {
+      const level = Math.min(Math.floor(li[1].length / 2) + 1, 3);
+      while (listLevel < level) { out.push('<ul>'); listLevel++; }
+      while (listLevel > level) { out.push('</ul>'); listLevel--; }
+      out.push(`<li>${mdInline(li[2])}</li>`);
+      continue;
+    }
+    closeList();
+    out.push(`<p>${mdInline(t)}</p>`);
+  }
+  closeList();
+  closeTable();
+  return out.join('\n');
+}
+
+// A teljes olvasó-ablak HTML dokumentuma (sötét téma, színes címsorok)
+function buildResultDoc(md) {
+  const topic = (lastResearch && lastResearch.topic) || 'Kutatási eredmény';
+  return `<!DOCTYPE html>\n<html lang="hu"><head><meta charset="utf-8">\n<title>🔬 ${escHtml(topic)}</title>\n<style>\n  body { background:#0b1220; color:#e2e8f0; font-family:'Segoe UI',system-ui,sans-serif;\n         font-size:15px; line-height:1.65; margin:0; }\n  .wrap { max-width:840px; margin:0 auto; padding:28px 34px 60px; }\n  h1 { color:#7dd3fc; font-size:24px; border-bottom:2px solid #1e3a5f; padding-bottom:10px; }\n  h2 { color:#93c5fd; font-size:20px; margin-top:30px; border-bottom:1px solid #1e293b; padding-bottom:6px; }\n  h3 { color:#fbbf24; font-size:17px; margin-top:24px; }\n  h4 { color:#a5b4fc; font-size:15px; margin-top:18px; }\n  strong { color:#f8fafc; }\n  a { color:#60a5fa; word-break:break-all; }\n  a:hover { color:#93c5fd; }\n  ul { padding-left:22px; margin:8px 0; }\n  li { margin:4px 0; }\n  li::marker { color:#38bdf8; }\n  hr { border:none; border-top:1px dashed #334155; margin:22px 0; }\n  code { background:#1e293b; color:#fbbf24; padding:1px 6px; border-radius:4px; font-size:13px; }\n  table { border-collapse:collapse; width:100%; margin:14px 0; font-size:14px; }\n  th { background:#1e3a5f; color:#bae6fd; text-align:left; }\n  th, td { border:1px solid #334155; padding:7px 10px; }\n  tr:nth-child(even) td { background:#0f172a; }\n  p { margin:8px 0; }\n  .top { position:sticky; top:0; background:#0b1220ee; padding:10px 0; font-size:12px;\n         color:#64748b; border-bottom:1px solid #1e293b; }\n</style></head><body><div class="wrap">\n<div class="top">🔬 Kutató ügynök – olvasó nézet (a tartalom automatikusan frissül, ha tovább kérdezel)</div>\n${renderMarkdownHtml(md)}\n</div></body></html>`;
+}
+
+// Az olvasó-ablak megnyitása / frissítése a képernyő jobb szélén, teljes magasságban
+let resultWin = null;
+function openResultWindow() {
+  const md = (document.getElementById('research-output').value || '').trim();
+  if (!md) { log('⚠️ Nincs megjeleníthető kutatási eredmény.', 'warn'); return; }
+  if (!resultWin || resultWin.closed) {
+    const sw = (window.screen && screen.availWidth) || 1600;
+    const sh = (window.screen && screen.availHeight) || 900;
+    const w = Math.min(860, sw - 80);
+    resultWin = window.open('about:blank', 'researchResultWin',
+      `width=${w},height=${sh},left=${sw - w},top=0`);
+  }
+  if (!resultWin) {
+    log('⚠️ Az olvasó ablak megnyitását a böngésző blokkolta – kattints az "🗔 Olvasó ablak" gombra.', 'warn');
+    return;
+  }
+  try {
+    const doc = resultWin.document;
+    doc.open();
+    doc.write(buildResultDoc(md));
+    doc.close();
+    resultWin.focus();
+  } catch (e) { log('⚠️ Nem sikerült az olvasó ablak frissítése: ' + e.message, 'warn'); }
+}
+// Csak akkor frissít, ha az ablak már nyitva van (nem nyit újat)
+function refreshResultWindow() {
+  if (resultWin && !resultWin.closed) openResultWindow();
 }
 
 // Chat szöveg → biztonságos HTML: Markdown linkek és csupasz URL-ek kattinthatóvá tétele
@@ -1502,6 +1641,8 @@ function appendToResearchOutput(question, answer) {
   if (!out) return;
   const addition = `\n\n---\n\n## Folytatás: ${question}\n\n${answer}\n`;
   out.value += addition;
+  // Ha nyitva az olvasó ablak, oda is kerüljön be az új válasz
+  refreshResultWindow();
   if (lastResearch) {
     lastResearch.markdown = out.value;
     // A folytatással bővült kutatást is mentjük az előzményekbe
