@@ -1,7 +1,7 @@
 name: Supabase Keep-Alive
 
 # Megakadályozza, hogy a Supabase ingyenes projekt 7 nap inaktivitás után leálljon.
-# Minden 3. napon lefut egy egyszerű lekérdezés a documents tábla felé.
+# Minden 3. napon lefut egy egyszerű lekérdezés a healthcheck tábla felé.
 
 on:
   schedule:
