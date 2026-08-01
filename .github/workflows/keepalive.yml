@@ -29,9 +29,9 @@ jobs:
             exit 1
           fi
           HTTP_CODE=$(curl -sS -o /dev/null -w "%{http_code}" --fail-with-body \
-            "${SUPABASE_URL%/}/rest/v1/documents?select=id&limit=1" \
-            -H "apikey: ${SUPABASE_ANON_KEY}" \
-            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}") || {
+                "${SUPABASE_URL%/}/rest/v1/healthcheck?select=id&limit=1" \
+                  -H "apikey: ${SUPABASE_ANON_KEY}" \
+                  -H "Authorization: Bearer ${SUPABASE_ANON_KEY}") || {
             echo "Hiba: a Supabase host nem érhető el vagy a kérés sikertelen."
             exit 1
           }
