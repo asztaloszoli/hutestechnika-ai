@@ -234,7 +234,7 @@ textarea { resize: vertical; min-height: 120px; font-family: inherit; font-size:
     <input type="file" id="ocr-input" accept="image/*" onchange="runOcr(this)" style="display:none;">
     <button class="btn secondary" onclick="document.getElementById('ocr-input').click()">📷 Kép kiválasztása</button>
     <div id="ocr-preview"></div>
-    <div id="ocr-actions" style="display:none;margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">
+    <div id="ocr-actions" style="display:none;margin-top:8px;gap:8px;flex-wrap:wrap;">
       <input type="text" id="ocr-title" placeholder="Dokumentum cím..." style="flex:1;min-width:200px;" />
       <button class="btn" onclick="uploadOcrResult()">⬆️ Feltöltés</button>
     </div>
@@ -264,38 +264,43 @@ textarea { resize: vertical; min-height: 120px; font-family: inherit; font-size:
     </p>
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
       <input type="text" id="research-topic" placeholder="pl. legjobb hőszivattyúk családi házhoz 2026" style="flex:1;min-width:240px;" />
-      <button class="btn" id="research-btn" onclick="runResearch()">🔬 Kutatás indítása</button>
+      <button class="btn" id="research-btn" onclick="runResearch()" title="Elindítja a kutatást a fenti beállításokkal. A haladást a naplóban követheted, a végén az eredmény külön olvasó ablakban is megnyílik.">🔬 Kutatás indítása</button>
       <button class="btn secondary" id="research-clear-btn" onclick="clearResearch()" title="Előző kutatás törlése, tiszta lap">🆕 Új kutatás</button>
       <button class="btn danger" id="research-stop-btn" onclick="stopResearch()" style="display:none;" title="A futó mélykutatás leállítása – az eddigi adatokból megírja a választ">⏹️ Elég – írd meg a választ</button>
     </div>
     <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;font-size:12px;color:#cbd5e1;">
-      <label style="display:flex;align-items:center;gap:6px;">
+      <label style="display:flex;align-items:center;gap:6px;cursor:help;" title="MAGYAR PIAC – mit csinál?&#10;A Gemini saját Google-keresését használja, és a magyar (.hu) oldalakat részesíti előnyben: importőrök, márkakereskedők, PDF árlisták, magyar tesztek.&#10;&#10;MIKOR KAPCSOLD BE?&#10;Ha magyarországi árak, forgalmazók, beszerzési lehetőségek érdekelnek (pl. 'mennyibe kerül itthon').&#10;&#10;MIKOR HAGYD KI?&#10;Nemzetközi témánál, műszaki összehasonlításnál, külföldi teszteknél – azokból több és jobb van angolul.&#10;&#10;JÓ TUDNI: böngészőben is működik, nem igényel Tavily kulcsot.">
         <input type="checkbox" id="research-hu" /> Magyar piac (Google Search) – pl. árak, importőrök
       </label>
-      <label style="display:flex;align-items:center;gap:6px;" title="Kínai nyelvű keresőszavakat is készít, így kínai gyártói oldalakat is megtalál. A választ magyarul kapod.">
+      <label style="display:flex;align-items:center;gap:6px;cursor:help;" title="KÍNAI FORRÁSOK – mit csinál?&#10;A témát lefordítja kínai keresőkifejezésre is, és a szokásos keresés MELLETT kínaiul is keres. A választ természetesen magyarul kapod.&#10;&#10;MIKOR KAPCSOLD BE?&#10;Alkatrész, gyártói és nagykereskedelmi információ, kínai gyártású termékek esetén (pl. Alibaba-típusú beszerzés, OEM gyártók).&#10;&#10;MIKOR HAGYD KI?&#10;Magyar piaci vagy európai témánál – csak lassítja és drágítja a kutatást.">
         <input type="checkbox" id="research-cn" /> Kínai források is (kínai keresőszavak)
       </label>
-      <label style="display:flex;align-items:center;gap:6px;">
-        Mélység:
-        <select id="research-depth" style="width:auto;min-width:160px;">
-          <option value="simple" selected>Egyszerű keresés (gyors válasz)</option>
-          <option value="autonomous">Önálló mélykutatás (autonóm)</option>
-          <option value="quick">Piackutatás – gyors (1 fázis)</option>
-          <option value="full">Piackutatás – teljes (3 fázis)</option>
-        </select>
+      <label style="display:flex;align-items:center;gap:6px;cursor:help;" title="TÉNYELLENŐRZÉS – mit csinál?&#10;A kész választ még egyszer visszaadja a modellnek a forrásokkal együtt, és minden számot, árat, nevet és adatot összevet velük.&#10;&#10;MI TÖRTÉNIK A HIBÁKKAL?&#10;• Ami ellentmond a forrásnak: kijavítja&#10;• Ami sehol nem szerepel: törli, vagy '⚠️ nem találtam rá forrást' jelölést kap&#10;• Ami csak egy gyenge blogból jön: '(csak egy forrás, ellenőrizendő)'&#10;&#10;ÁRA: egy extra Gemini-hívás (kb. +5-10% költség).&#10;&#10;AJÁNLÁS: hagyd bekapcsolva. Ez akadályozza meg, hogy a modell magabiztosan kitalált árakat és adatokat írjon le.">
+        <input type="checkbox" id="research-verify" checked /> Tényellenőrzés (forráshűség)
       </label>
-      <label style="display:flex;align-items:center;gap:6px;">
-        Max. körök (autonóm):
+      <label style="display:flex;align-items:center;gap:6px;cursor:help;" title="ÖSSZEHASONLÍTÓ ELEMZÉS – mit csinál?&#10;Nem a kutatást változtatja meg, hanem a VÁLASZ FORMÁJÁT. Kötött, ötpontos szakértői szerkezetben írja meg:&#10;1. Áttekintés&#10;2. Elérhető opciók (táblázat árakkal és jellemzőkkel)&#10;3. Összehasonlítás&#10;4. Ajánlás és döntéstámogatás&#10;5. Fontos tudnivalók&#10;&#10;MIKOR KAPCSOLD BE?&#10;Ha választani akarsz több lehetőség közül (pl. 'melyik a legjobb hőszivattyú', 'milyen furgonokat lehet kapni').&#10;&#10;MIKOR HAGYD KI?&#10;Egy konkrét kérdésnél (pl. 'mennyi a garancia?') – ott felesleges a táblázatos szerkezet.&#10;&#10;BÁRMELYIK mélységgel és a Magyar piac négyzettel is kombinálható.">
+        <input type="checkbox" id="research-compare" /> Összehasonlító elemzés (piackutatás formátum)
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;cursor:help;" title="MAX. KÖRÖK – mire jó?&#10;Ez a FELSŐ HATÁR: az ügynök hamarabb is leállhat, ha úgy ítéli, hogy összegyűlt minden (vagy ha már nem talál új szereplőt).&#10;&#10;Egy kör = 4-6 keresés + a talált oldalak feldolgozása.&#10;&#10;MELYIKET VÁLASSZAM?&#10;• 3 – gyors körkép (kb. 1-2 perc)&#10;• 5 – általános használatra (ajánlott)&#10;• 8 – alapos piackutatás&#10;• 12 – maximális alaposság, de lassabb és drágább&#10;&#10;A több kör arányosan többe kerül – a költséget az alatta látható számlálón követheted.">
+        Max. körök:
         <select id="research-rounds" style="width:auto;min-width:70px;">
           <option value="3">3</option>
           <option value="5" selected>5</option>
           <option value="8">8</option>
+          <option value="12">12</option>
         </select>
       </label>
     </div>
+    <!-- Élő Gemini token- és költségszámláló (a Google számlázás csak egy nappal késve mutatja) -->
+    <div id="usage-bar" style="margin-top:10px;padding:8px 10px;background:#0f172a;border:1px solid #334155;border-radius:6px;font-size:12px;color:#cbd5e1;display:flex;gap:16px;flex-wrap:wrap;align-items:center;">
+      <span title="Az éppen futó (vagy legutóbbi) kutatás Gemini-fogyasztása">🧮 <b>Ez a kutatás:</b> <span id="usage-run">–</span></span>
+      <span title="A mai nap összes Gemini-hívása ebből az appból">📅 <b>Ma:</b> <span id="usage-today">–</span></span>
+      <span title="A folyó hónap összes Gemini-hívása – ez a Google havi számlázási ciklusához igazodik, és csak hónapfordulókor nullázódik">🗓️ <b><span id="usage-month-label">Ebben a hónapban</span>:</b> <span id="usage-month">–</span></span>
+      <button class="btn secondary" style="padding:2px 8px;font-size:11px;" onclick="resetUsageMonth()" title="A havi számláló nullázása (a Google számlázást nem érinti)">Nullázás</button>
+    </div>
     <p style="font-size:11px;color:#64748b;margin-top:8px;">
       Megjegyzés: a kutatáshoz <b>Tavily API kulcs</b> ajánlott (ingyenes: tavily.com) – kulcs nélkül TinyFish/DuckDuckGo-tartalékkal próbálkozik.
-      Az <b>Egyszerű keresés</b> gyors, egyetlen kérdésre ad választ. Az <b>Önálló mélykutatás</b> magától keres tovább, amíg elég adata lesz (a beállított max. körig). A <b>Piackutatás</b> módok összehasonlító témákhoz valók (pl. „legjobb hőszivattyúk").
+      A kutatás mindig többkörös: tervet készít, keres, megnézi mi hiányzik, és addig folytatja, amíg elég adata lesz (a beállított max. körig) – gyorsabb válaszhoz állítsd a köröket 3-ra. Az <b>Összehasonlító elemzés</b> négyzet a válasz formáját szabja meg (pl. „legjobb hőszivattyúk" típusú kérdésekhez), a kutatás módját nem.
     </p>
     <!-- Élő részeredmények a futó mélykutatás alatt -->
     <div id="research-live" style="display:none;margin-top:10px;">
@@ -356,7 +361,7 @@ let selectedFiles = [];
 let ocrText = '';
 
 // ===== INIT =====
-window.onload = function() {
+window.onload = async function() {
   // pdf.js worker beállítása (PDF szövegkinyeréshez)
   if (window.pdfjsLib) {
     pdfjsLib.GlobalWorkerOptions.workerSrc =
@@ -367,8 +372,25 @@ window.onload = function() {
   geminiKey = localStorage.getItem('admin_gemini_key') || '';
   tinyfishKey = localStorage.getItem('admin_tinyfish_key') || '';
   tavilyKey = localStorage.getItem('admin_tavily_key') || '';
+  // TARTALÉK: az asztali appban a beállítások fájlba is mentődnek. Ha a localStorage
+  // kiürült (pl. egy takarító program törölte), a fájlból visszaállítjuk a kulcsokat.
+  if (window.desktopApi && window.desktopApi.loadSettings) {
+    try {
+      const s = (await window.desktopApi.loadSettings()) || {};
+      let restored = false;
+      if (!sbUrl && s.sbUrl) { sbUrl = s.sbUrl; localStorage.setItem('admin_sb_url', sbUrl); restored = true; }
+      if (!sbKey && s.sbKey) { sbKey = s.sbKey; localStorage.setItem('admin_sb_key', sbKey); restored = true; }
+      if (!geminiKey && s.geminiKey) { geminiKey = s.geminiKey; localStorage.setItem('admin_gemini_key', geminiKey); restored = true; }
+      if (!tinyfishKey && s.tinyfishKey) { tinyfishKey = s.tinyfishKey; localStorage.setItem('admin_tinyfish_key', tinyfishKey); restored = true; }
+      if (!tavilyKey && s.tavilyKey) { tavilyKey = s.tavilyKey; localStorage.setItem('admin_tavily_key', tavilyKey); restored = true; }
+      if (restored) log('✓ A beállítások visszaállítva a mentési fájlból.', 'ok');
+      // Ha még nincs mentési fájl, de a localStorage-ban vannak kulcsok: egyszeri átmentés
+      if (!restored && !s.geminiKey && (geminiKey || sbKey || tavilyKey)) persistSettingsFile();
+    } catch (e) { /* nem kritikus */ }
+  }
+  loadUsage();
   document.getElementById('sb-url').value = sbUrl;
-  if (localStorage.getItem('admin_sb_key')) document.getElementById('sb-key').value = '••••••••';
+  if (sbKey) document.getElementById('sb-key').value = '••••••••';
   else document.getElementById('sb-key').value = sbKey;
   if (geminiKey) document.getElementById('gemini-key').value = '••••••••';
   if (tinyfishKey) document.getElementById('tinyfish-key').value = '••••••••';
@@ -396,7 +418,17 @@ function saveConfig() {
   if (tkey && !tkey.startsWith('•')) { tinyfishKey = tkey; localStorage.setItem('admin_tinyfish_key', tkey); }
   const tvkey = document.getElementById('tavily-key').value.trim();
   if (tvkey && !tvkey.startsWith('•')) { tavilyKey = tvkey; localStorage.setItem('admin_tavily_key', tvkey); }
+  // A kulcsokat fájlba is mentjük (localStorage-törlés elleni védelem)
+  persistSettingsFile();
   log('✓ Beállítások mentve', 'ok');
+}
+
+// A beállítások mentése az asztali app saját fájljába (beallitasok.json)
+function persistSettingsFile() {
+  if (window.desktopApi && window.desktopApi.saveSettings) {
+    window.desktopApi.saveSettings({ sbUrl, sbKey, geminiKey, tinyfishKey, tavilyKey })
+      .catch(() => {});
+  }
 }
 
 async function testConnection() {
@@ -637,7 +669,7 @@ async function ocrImage(file) {
   const b64 = await fileToBase64(file);
   const mime = file.type || 'image/jpeg';
   const resp = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${geminiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_SMART}:generateContent?key=${geminiKey}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -653,6 +685,9 @@ async function ocrImage(file) {
   );
   const data = await resp.json();
   if (data.error) throw new Error(data.error.message);
+  // A képek tokenben drágák, és ez a hívás nem a callGemini-n megy át, ezért
+  // itt kell elkönyvelni – enélkül a számláló kevesebbet mutat, mint a Google számlája.
+  trackUsage(data, false, MODEL_SMART);
   return data.candidates[0].content.parts[0].text;
 }
 
@@ -917,10 +952,131 @@ function clearResearch() {
   log('🆕 Tiszta lap – indíthatsz új kutatást.', 'ok');
 }
 
+// ===== TOKEN- ÉS KÖLTSÉGKÖVETÉS =====
+// A Google számlázása egy nappal késik, ezért itt helyben, valós időben számoljuk.
+// A Gemini minden válaszban visszaadja a pontos token-számokat (usageMetadata),
+// tehát ez NEM becslés – csak a dollárra váltás az, az alábbi egységárakkal.
+//
+// KÉT MODELLEL dolgozunk (hivatalos Gemini API árlista, 1 millió tokenre):
+//   gemini-3.5-flash       bemenet 1,50 $ / kimenet 9,00 $ – a minőségi feladatokra
+//   gemini-3.5-flash-lite  bemenet 0,30 $ / kimenet 2,50 $ – a gépies részfeladatokra
+// A kimeneti ár a "gondolkodási" (thinking) tokeneket is tartalmazza, és a kimenet
+// 6x drágább a bemenetnél – ezért a kimenet csökkentése a leghatásosabb spórolás.
+const MODEL_SMART = 'gemini-3.5-flash';
+const MODEL_CHEAP = 'gemini-3.5-flash-lite';
+const MODEL_PRICES = {
+  [MODEL_SMART]: { in: 1.50 / 1e6, out: 9.00 / 1e6 },
+  [MODEL_CHEAP]: { in: 0.30 / 1e6, out: 2.50 / 1e6 },
+};
+// A Google Search grounding HAVI 5000 keresésig díjmentes (a Gemini 3 modellek közös
+// kerete), fölötte 14 $ / 1000 keresés. FIGYELEM: egy grounded kérés több keresést is
+// indíthat, ezért a Google számláján több keresés szerepelhet, mint amennyi hívást itt látsz.
+const GROUNDING_FREE_PER_MONTH = 5000;
+const GROUNDING_PRICE_PER_QUERY = 14 / 1000;
+
+let usageRun = emptyUsage('');
+let usageToday = emptyUsage('');
+let usageMonth = emptyUsage('');
+
+function todayKey() { return new Date().toISOString().slice(0, 10); }
+// A Google havonta számláz, ezért a fő számláló hónapra értelmezett (év-hónap kulcs).
+function monthKey() { return new Date().toISOString().slice(0, 7); }
+// in/out = a drága (MODEL_SMART), inCheap/outCheap = az olcsó (MODEL_CHEAP) modell tokenjei
+function emptyUsage(key) { return { key, in: 0, out: 0, inCheap: 0, outCheap: 0, calls: 0, grounded: 0 }; }
+
+function loadUsage() {
+  try {
+    const s = JSON.parse(localStorage.getItem('admin_gemini_usage_v2') || '{}');
+    usageToday = (s.today && s.today.key === todayKey()) ? s.today : emptyUsage(todayKey());
+    usageMonth = (s.month && s.month.key === monthKey()) ? s.month : emptyUsage(monthKey());
+  } catch (e) {
+    usageToday = emptyUsage(todayKey());
+    usageMonth = emptyUsage(monthKey());
+  }
+  renderUsage();
+}
+
+function saveUsage() {
+  try {
+    localStorage.setItem('admin_gemini_usage_v2', JSON.stringify({ today: usageToday, month: usageMonth }));
+  } catch (e) { /* nem kritikus */ }
+}
+
+// A grounding díjmentes kerete a HÓNAPRA szól, ezért a "ma" / "ez a kutatás" bontásban is
+// a havi állás dönti el, hogy van-e egyáltalán díjköteles keresés.
+function groundingCost(u) {
+  const monthQ = usageMonth.grounded || 0;
+  if (monthQ <= GROUNDING_FREE_PER_MONTH) return 0;
+  const billable = Math.min(u.grounded || 0, monthQ - GROUNDING_FREE_PER_MONTH);
+  return billable * GROUNDING_PRICE_PER_QUERY;
+}
+
+function usageCost(u) {
+  const s = MODEL_PRICES[MODEL_SMART], c = MODEL_PRICES[MODEL_CHEAP];
+  return (u.in || 0) * s.in + (u.out || 0) * s.out +
+    (u.inCheap || 0) * c.in + (u.outCheap || 0) * c.out +
+    groundingCost(u);
+}
+
+function fmtUsage(u) {
+  const tok = (u.in || 0) + (u.out || 0) + (u.inCheap || 0) + (u.outCheap || 0);
+  if (!u.calls) return '–';
+  const usd = usageCost(u);
+  const g = u.grounded ? `, ${u.grounded} Google-keresés` : '';
+  return `${u.calls} hívás${g} · ${tok.toLocaleString('hu-HU')} token · ~$${usd.toFixed(3)}`;
+}
+
+function renderUsage() {
+  const r = document.getElementById('usage-run');
+  const t = document.getElementById('usage-today');
+  const m = document.getElementById('usage-month');
+  const lbl = document.getElementById('usage-month-label');
+  if (r) r.textContent = fmtUsage(usageRun);
+  if (t) t.textContent = fmtUsage(usageToday);
+  if (m) m.textContent = fmtUsage(usageMonth);
+  if (lbl) lbl.textContent = new Date().toLocaleDateString('hu-HU', { year: 'numeric', month: 'long' });
+}
+
+// Egy Gemini válasz token-adatainak elkönyvelése
+function trackUsage(data, isGrounded, model) {
+  const meta = (data && data.usageMetadata) || {};
+  const inTok = meta.promptTokenCount || 0;
+  // A "gondolkodási" tokeneket a Google is kimenetként számlázza
+  const outTok = (meta.candidatesTokenCount || 0) + (meta.thoughtsTokenCount || 0);
+  const cheap = model === MODEL_CHEAP;
+  // Nap-, illetve hónapforduló: a megfelelő számláló indul újra
+  if (usageToday.key !== todayKey()) usageToday = emptyUsage(todayKey());
+  if (usageMonth.key !== monthKey()) usageMonth = emptyUsage(monthKey());
+  for (const u of [usageRun, usageToday, usageMonth]) {
+    if (cheap) { u.inCheap = (u.inCheap || 0) + inTok; u.outCheap = (u.outCheap || 0) + outTok; }
+    else { u.in += inTok; u.out += outTok; }
+    u.calls += 1;
+    if (isGrounded) u.grounded = (u.grounded || 0) + 1;
+  }
+  saveUsage();
+  renderUsage();
+}
+
+// Új kutatás indításakor a "Ez a kutatás" számláló nulláról indul
+function resetUsageRun() {
+  usageRun = emptyUsage('');
+  renderUsage();
+}
+
+// A havi számláló kézi nullázása (pl. ha a Google számlázási ciklusod nem elsején fordul)
+function resetUsageMonth() {
+  usageToday = emptyUsage(todayKey());
+  usageMonth = emptyUsage(monthKey());
+  saveUsage();
+  renderUsage();
+  log('🧮 A havi token-számláló nullázva (a Google számlázását ez nem érinti).', 'info');
+}
+
 // Gemini szöveggenerálás (a kutatás tervezéséhez és az elemzéshez)
 // Ha a díjmentes percenkénti limitbe ütközünk (429), automatikusan vár és újrapróbál.
 async function callGemini(prompt, system, opts = {}) {
-  const { temp = 0.3, maxTokens = 2000 } = opts;
+  // model: gépies részfeladatoknál MODEL_CHEAP-et adjunk át (lásd a hívási helyeket).
+  const { temp = 0.3, maxTokens = 2000, model = MODEL_SMART } = opts;
   if (!geminiKey) throw new Error('Gemini API kulcs szükséges.');
   const body = {
     contents: [{ parts: [{ text: prompt }] }],
@@ -937,12 +1093,27 @@ async function callGemini(prompt, system, opts = {}) {
 
   const maxRetries = 4;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    const resp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${geminiKey}`,
-      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
-    );
-    const data = await resp.json();
+    let resp, data;
+    try {
+      resp = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+      );
+      data = await resp.json();
+    } catch (netErr) {
+      // HÁLÓZATI hiba ("Failed to fetch"): megszakadt a net, DNS-hiba, vagy a Google
+      // bontotta a kapcsolatot. Ilyenkor a fetch DOB, nem HTTP hibakódot ad – a
+      // korábbi kód ezért azonnal elhasalt, és egy hosszú kutatás munkája elveszett.
+      if (attempt < maxRetries) {
+        const waitMs = Math.min((attempt + 1) * 5000, 20000);
+        log(`    🌐 Hálózati hiba a Gemini-hívásnál – újrapróbálom ${Math.round(waitMs / 1000)} mp múlva... (${attempt + 1}/${maxRetries})`, 'warn');
+        await new Promise(r => setTimeout(r, waitMs));
+        continue;
+      }
+      throw new Error('Nem érem el a Gemini szolgáltatást (hálózati hiba). Ellenőrizd az internetkapcsolatot.');
+    }
     if (!data.error) {
+      trackUsage(data, false, model);
       const cand = (data.candidates && data.candidates[0]) || {};
       const parts = (cand.content && cand.content.parts) || [];
       // A gondolkodási ("thought") részeket kihagyjuk, csak a tényleges választ adjuk vissza.
@@ -974,7 +1145,7 @@ async function callGemini(prompt, system, opts = {}) {
 // A modell maga keres a Google-ben, így a magyar PDF árlistákat és importőri
 // oldalakat is megtalálja. Visszaad: { text, sources: [{title,url}] }
 async function callGeminiGrounded(prompt, system, opts = {}) {
-  const { temp = 0.3, maxTokens = 4000 } = opts;
+  const { temp = 0.3, maxTokens = 6000 } = opts;
   if (!geminiKey) throw new Error('Gemini API kulcs szükséges.');
   const body = {
     contents: [{ parts: [{ text: prompt }] }],
@@ -990,12 +1161,25 @@ async function callGeminiGrounded(prompt, system, opts = {}) {
 
   const maxRetries = 4;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    const resp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${geminiKey}`,
-      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
-    );
-    const data = await resp.json();
+    let resp, data;
+    try {
+      resp = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${geminiKey}`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+      );
+      data = await resp.json();
+    } catch (netErr) {
+      // Lásd callGemini: a hálózati hiba átmeneti, ezért várakozás után újrapróbáljuk.
+      if (attempt < maxRetries) {
+        const waitMs = Math.min((attempt + 1) * 5000, 20000);
+        log(`    🌐 Hálózati hiba a Gemini-hívásnál – újrapróbálom ${Math.round(waitMs / 1000)} mp múlva... (${attempt + 1}/${maxRetries})`, 'warn');
+        await new Promise(r => setTimeout(r, waitMs));
+        continue;
+      }
+      throw new Error('Nem érem el a Gemini szolgáltatást (hálózati hiba). Ellenőrizd az internetkapcsolatot.');
+    }
     if (!data.error) {
+      trackUsage(data, true, MODEL_SMART);
       const cand = (data.candidates && data.candidates[0]) || {};
       const parts = (cand.content && cand.content.parts) || [];
       // A gondolkodási ("thought") részeket kihagyjuk – csak a tényleges válasz kell.
@@ -1031,33 +1215,6 @@ async function callGeminiGrounded(prompt, system, opts = {}) {
   throw new Error('Gemini: a kvóta-limit miatt többszöri próbálkozás után sem sikerült.');
 }
 
-// MAGYAR KUTATÁS GROUNDING-GAL: a Gemini saját Google-keresésével dolgozik.
-// Akkor fut, ha a "Csak magyar (.hu) források" négyzet be van pipálva.
-async function runGroundedResearch(topic) {
-  log(`\n🇭🇺 Google Search Grounding (magyar piac): ${topic}`, 'info');
-  setProgress(20);
-  const system = 'Magyar piackutató szakértő asszisztens vagy, aki a Google keresőt használja. ' +
-    'KIZÁRÓLAG a Google keresési találatokból dolgozz, ne találj ki adatot. ' +
-    'Részesítsd előnyben a magyar (.hu) forrásokat: hivatalos importőri/márkakereskedői oldalak, árlisták (PDF is), magyar tesztek és hírek. ' +
-    'Kifejezetten KERESS konkrét árakat, modelleket, műszaki adatokat. Ha egy adat csak PDF árlistában van, akkor is keresd meg. ' +
-    'Használj magyar köznyelvi szinonimákat is a keresésnél (pl. furgon, kisteherautó, EV van, haszongépjármű). ' +
-    'Ha egy konkrét számra/árra nincs megbízható forrás, írd: "Erről nem találtam megbízható magyar forrást". ' +
-    'A válasz tömör, jól tagolt magyar Markdown legyen, konkrét számokkal és nevekkel.';
-  const prompt = `Téma: ${topic}\n\nKészíts alapos, KONKRÉT magyar piaci összefoglalót a Google keresési találatok alapján. ` +
-    `Szerepeljenek a konkrét nevek/modellek és az árak (nettó/bruttó, ha kiderül), valamint a fontos műszaki adatok. ` +
-    `Ahol releváns, használj felsorolást vagy táblázatot.`;
-  setProgress(45);
-  const { text, sources } = await callGeminiGrounded(prompt, system, { temp: 0.3, maxTokens: 4000 });
-  if (!text) throw new Error('A Gemini Grounding nem adott vissza választ. Próbáld újra, vagy ellenőrizd a Gemini kulcsot.');
-  setProgress(90);
-  let out = text;
-  if (sources.length) {
-    const list = sources.map(s => `- [${s.title}](${s.url})`).join('\n');
-    out += `\n\n## Felhasznált források\n${list}`;
-  }
-  return out;
-}
-
 function parseQueryLines(text) {
   return text.split('\n')
     .map(l => l.trim().replace(/^[-•\d.\s]+/, '').trim())
@@ -1065,11 +1222,125 @@ function parseQueryLines(text) {
     .filter(l => l.length > 5 || (/[\u4e00-\u9fff]/.test(l) && l.length > 1));
 }
 
+// Keresési kifejezés egységesítése a duplikátum-szűréshez.
+// Enélkül a "Citroën e-Jumpy" L2 ár végsebesség és a Citroen e-Jumpy L2 ár végsebesség
+// két KÜLÖNBÖZŐ keresésnek számított (idézőjel, ékezet) – és a reflexió ugyanazt javasolta újra.
+function normalizeQuery(q) {
+  return String(q)
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // ékezetek eltávolítása (á→a, ë→e)
+    .replace(/["'„“”»«]/g, '')                        // idézőjelek eltávolítása
+    .replace(/[^a-z0-9\u4e00-\u9fff]+/g, ' ')         // írásjelek szóközre
+    .trim()
+    .replace(/\s+/g, ' ');
+}
+
+// FELSOROLÁS-MÓD felismerése: "minden márka / teljes piac / összes típus" jellegű kérdés.
+// Ilyenkor nem az "elég-e már" érzés dönt, hanem a telítődés és a végén a teljességi ellenőrzés.
+function isEnumerationQuestion(topic) {
+  return /minden|összes|teljes piac|milyen márk|milyen típus|márkák|típusok|felsorol/i.test(String(topic));
+}
+
+// A condenseFacts által kiadott "FELSOROLT TÉTELEK: ..." sor kibontása névlistává
+function parseEntityLine(facts) {
+  const m = String(facts).match(/FELSOROLT T[ÉE]TELEK\s*:\s*(.+)/i);
+  if (!m) return [];
+  return m[1].split(/[,;]/).map(s => s.trim()).filter(s => s.length > 1 && s.length < 80);
+}
+
 // Be van-e kapcsolva a "Kínai források is" pipa
 function isChineseResearchOn() {
   const el = document.getElementById('research-cn');
   return !!(el && el.checked);
 }
+
+// Be van-e kapcsolva a "Tényellenőrzés" pipa
+function isVerifyOn() {
+  const el = document.getElementById('research-verify');
+  return !!(el && el.checked);
+}
+
+// Be van-e kapcsolva az "Összehasonlító elemzés" pipa (a válasz kötött szakértői szerkezete)
+function isCompareOn() {
+  const el = document.getElementById('research-compare');
+  return !!(el && el.checked);
+}
+
+// A kötött piackutatási szerkezet leírása (korábban a külön "Piackutatás" módok adták)
+const COMPARE_STRUCTURE =
+  'A válasz KÖTÖTT szerkezete: "## 1. Áttekintés", "## 2. Elérhető opciók" (táblázat vagy lista árakkal és jellemzőkkel, MINDEN megtalált szereplővel), ' +
+  '"## 3. Összehasonlítás", "## 4. Ajánlás és döntéstámogatás", "## 5. Fontos tudnivalók". ' +
+  'Ne általánosságokat mondj, hanem konkrét, érthető tanácsot a talált adatokból. ' +
+  'Ha valamiről nincs adat: "Erről nem találtam információt – érdemes közvetlenül utánajárni".';
+
+// A mai dátum. Enélkül a modell a saját tanítási idejéből indul ki,
+// és pl. 2026-ban is "2024"-es árlistákat keres.
+function todayISO() { return new Date().toISOString().slice(0, 10); }
+
+// TÉNY-SZINTŰ ELAVULÁS.
+// A dilemma lényege: nem a FORRÁS korát kell megítélni, hanem az adott TÉNY típusát.
+// Ugyanabban a 3 éves videóban az ár már használhatatlan, a műszaki tapasztalat viszont
+// tökéletesen érvényes. Ezért nem forrást dobunk el, hanem tényenként döntünk.
+const FRESHNESS_RULES =
+  `IDŐFÜGGŐSÉG (a mai dátum: ${todayISO()}): minden forrásnál szerepel a "Közzétéve:" mező. Használd. ` +
+  'IDŐÉRZÉKENY tények: ár, akció, kedvezmény, készlet, támogatás/pályázat, kamat, jogszabály, adó, modellév, verziószám, előfizetési csomag. ' +
+  'Ezeknél: 12 hónapnál régebbi forrás esetén tedd oda: "(⚠️ X-es adat, azóta változhatott)"; ' +
+  '24 hónapnál régebbi árat/akciót/támogatást NE közölj tényként – legfeljebb így: "korábban ennyi volt, mai adatot nem találtam". ' +
+  'Ha a forrás dátuma ismeretlen ÉS az állítás időérzékeny, jelöld: "(dátum ismeretlen, ellenőrizendő)". ' +
+  // A forrás KORA és a benne írt HATÁRIDŐ két külön dolog: egy fél éves oldal is
+  // hirdethet olyan lehetőséget, aminek a beadhatósága közben lejárt. A fenti
+  // "hány hónapos a forrás" szabály ezt nem fogja meg, ezért kell ez a külön szabály.
+  'HATÁRIDŐ ÉS ÉRVÉNYESSÉG: ha a forrás konkrét határidőt vagy érvényességi időszakot említ (pályázat, támogatás, akció, kedvezmény, előjegyzés, kampány, árlista vagy ajánlat érvényessége, jelentkezési vagy beadhatósági időszak), ' +
+  'akkor azt MINDIG vesd össze a mai dátummal. Ha a határidő MÁR ELMÚLT, TILOS elérhetőként, igényelhetőként vagy aktuálisként közölni: írd oda, hogy LEJÁRT, és add meg a dátumot is. ' +
+  'Ha a határidő a jövőben van, azt is írd ki. Ha a lehetőségnek van határideje, de a forrás nem közli, jelöld: "(a határidőt a forrás nem közli, ellenőrizendő)". ' +
+  'IDŐTLEN tények: műszaki elv, méret, raktér, szerelési és karbantartási gyakorlat, hibajelenség és oka, ' +
+  'anyagtulajdonság, használati tapasztalat, előny/hátrány. Ezeket a forrás kora NEM érvényteleníti – régi forrásból is nyugodtan átveheted. ' +
+  'Ütközésnél mindig a FRISSEBB és egyben hivatalosabb forrás nyer.';
+
+// VIDEÓS FORRÁS SZEREPKÖRE.
+// A gyártók az influenszerekkel dolgoznak, ezért a videó a valós tapasztalat aranybányája,
+// ugyanakkor árlistának alkalmatlan (elavul, és a szponzoráció torzít).
+const VIDEO_SOURCE_RULES =
+  'VIDEÓS FORRÁSOK ("Forrás típusa: VIDEÓ"): ezek TAPASZTALAT-források, nem árforrások. ' +
+  'Elfogadható belőlük: valós használati tapasztalat, gyakorlati fogyasztás/teljesítmény, HÁTRÁNYOK, hibák, szerelési fogások, összbenyomás. ' +
+  'NEM fogadható el belőlük: ár, akció, támogatás, felszereltségi lista és pontos műszaki adat – ezekre a gyártói oldalt/árlistát idézd. ' +
+  'Ha egy adat CSAK videóból van és ár jellegű, hagyd ki. ' +
+  'Ha a videónál "SZPONZORÁLT" jelzés szerepel, a belőle vett pozitív állítás mellé írd: "(szponzorált videó – a hátrányokat elhallgathatja)". ' +
+  'Gépi felirat esetén a számokat kezeld óvatosan (félrehallhatta), és jelöld, ha egy szám csak gépi feliratból jön.';
+
+// Minden válasz-promptba bekerülő KÖZÖS forráshűség-szabály.
+// Enélkül a modell a saját (elavult/téves) emlékezetéből egészíti ki a választ.
+const GROUNDING_RULES =
+  'SZIGORÚ FORRÁSHŰSÉG: kizárólag a megadott forrásokban/tényekben szereplő információt állíthatsz. ' +
+  'A saját előzetes tudásodból SEMMILYEN nevet, számot, árat, verziót, nyelvi támogatást, licencet vagy teszteredményt nem írhatsz le. ' +
+  'Minden konkrét állítás (név, szám, ár, adat) után add meg a forrást így: [forrás: URL] – pontosan azt az URL-t, ami a tényeknél szerepel. ' +
+  'Ha egy állításhoz nincs forrás a megadott anyagban, akkor HAGYD KI, vagy ha fontos, jelöld így: "⚠️ nem találtam rá forrást". ' +
+  'Amit csak EGYETLEN, gyenge minőségű forrás (blog, hirdetés-gyűjtő, SEO-oldal) állít, azt jelöld: "(csak egy forrás, ellenőrizendő)". ' +
+  'Soha ne találj ki forrás-URL-t. ' +
+  'A KÉRDÉS FELTÉTELE: ha a kérdés konkrét feltételt tartalmaz (pl. MAGYAR nyelv, adott árkeret, adott méret, adott évjárat), ' +
+  'akkor minden felsorolt opciónál a forrásnak PONTOSAN ERRE A FELTÉTELRE kell bizonyítékot adnia. ' +
+  'Az általános állítás (pl. "27 nyelvet támogat", "sok nyelven elérhető") NEM bizonyíték arra, hogy a kért konkrét nyelv/feltétel benne van. ' +
+  'Ilyenkor írd oda: "a forrás ezt a kért feltételre nem erősíti meg", vagy ha a forrásban ott a tételes lista, idézd belőle a döntő adatot. ' +
+  'FORRÁS-RANGSOR: áraknál, csomagoknál, verziószámoknál, nyelvi listánál és műszaki adatnál MINDIG a HIVATALOS gyártói oldal (a termék saját doménje, doksi, árazási oldal, súgó) az irányadó. ' +
+  'MI SZÁMÍT HIVATALOSNAK: KIZÁRÓLAG a gyártó saját fő doménje és annak aloldalai (pl. a doksi, a súgó és az árazási oldal ugyanazon a doménen). ' +
+  'NEM hivatalos a márkanevet UTÁNZÓ vagy arra ráépülő domén (pl. a márkanév + extra szó/TLD változatai, "...ai.us", "...-review.com", "...blog.com" alakú oldalak), ' +
+  'továbbá nem hivatalos semmilyen viszonteladó, affiliált, összehasonlító, katalógus- vagy alkalmazásbolt-oldal. ' +
+  'Ha bizonytalan vagy abban, hogy egy domén tényleg a gyártóé-e, akkor NE nevezd hivatalosnak. ' +
+  'Ha ugyanarról az adatról van hivatalos forrás IS és blog/review/összehasonlító oldal is, akkor a HIVATALOSAT idézd, a másikat hagyd el. ' +
+  'Ha a kettő ELLENTMOND, a hivatalosat írd le, és tedd mellé: "(egyes blogok más adatot írnak)". ' +
+  FRESHNESS_RULES + ' ' + VIDEO_SOURCE_RULES;
+
+// DÖNTÉSTÁMOGATÁS. Ha a kérdés arra irányul, hogy megéri-e valami, a puszta adatfelsorolás
+// kevés: a kérdezőnek jellemzően nincs rutinja a témában, ezért a mások által megélt
+// tapasztalat, a buktatók és a bevált trükkök legalább annyit érnek, mint a hivatalos számok.
+const PRACTICAL_ADVICE_RULES =
+  'DÖNTÉSI KÉRDÉS (pl. "megéri-e", "mikor érdemes", "hogyan a legjobb"): ne állj meg az adatok felsorolásánál. ' +
+  'Ha a források adnak rá alapot, a válasz VÉGÉRE tedd ezt a két szakaszt: ' +
+  '"## Gyakorlati tapasztalatok és trükkök" – mit írnak azok, akik már belevágtak: bevált fogások, rejtett vagy utólagos költségek, ' +
+  'gyakori hibák és buktatók, mire kell figyelni a szerződésnél vagy az ügyintézésnél, miben csalódtak. Minden ponthoz forrás. ' +
+  'Majd "## Összegzés – kinek érdemes, kinek nem" – rövid, indoklással: milyen helyzetben éri meg, és milyen helyzetben NEM. ' +
+  'Ez az összegzés a fenti forrásadatokból LEVONT következtetés lehet, de KIZÁRÓLAG azokra épülhet, és a benne szereplő számok egyezzenek a forrásokkal. ' +
+  'Ha a források nem adnak elég alapot a tapasztalati szakaszhoz, írd oda: "Erről nem találtam gyakorlati beszámolót" – ezt NE pótold találgatással.';
 
 // Igaz, ha van bármilyen háttér-keresési lehetőség (asztali app)
 function hasSearchBackend() {
@@ -1089,10 +1360,14 @@ function normalizeUrl(url) {
 }
 
 // Webkeresés: Tavily (legjobb), majd TinyFish, majd DuckDuckGo-tartalék
-async function researchSearch(query, max = 12) {
+// A country (pl. 'hungary') csak PREFERENCIA: a Tavily előre sorolja az adott
+// ország találatait, de a többit is visszaadja.
+async function researchSearch(query, max = 12, country = '') {
   if (tavilyKey && window.desktopApi && window.desktopApi.tavilySearch) {
     try {
-      const r = await window.desktopApi.tavilySearch(tavilyKey, query, max);
+      // A Tavily API legfeljebb 20 találatot engedélyez: több kérése hibára fut,
+      // és a kutatás csendben a gyengébb tartalékra (DuckDuckGo) esne vissza.
+      const r = await window.desktopApi.tavilySearch(tavilyKey, query, Math.min(max, 20), country);
       if (r && r.length) return r;
     } catch (e) { log(`    ⚠️ Tavily keresés hiba: ${e.message}`, 'warn'); }
   }
@@ -1110,7 +1385,9 @@ async function researchSearch(query, max = 12) {
 }
 
 // Oldal tartalmának letöltése: Tavily, majd TinyFish, majd sima letöltés + tisztítás
-async function researchFetch(url, maxChars = 3000) {
+// A maxChars OLDALANKÉNTI keret. A Tavily Extract URL-enként áraz, nem karakterenként,
+// ezért a bővebb kinyerés nem kerül többe – csak a modell lát többet az oldalból.
+async function researchFetch(url, maxChars = 6000) {
   if (tavilyKey && window.desktopApi && window.desktopApi.tavilyExtract) {
     try { const c = await window.desktopApi.tavilyExtract(tavilyKey, url, maxChars); if (c) return c; }
     catch (e) { /* tartalékra esünk */ }
@@ -1123,9 +1400,56 @@ async function researchFetch(url, maxChars = 3000) {
   catch (e) { return ''; }
 }
 
+// ─── VIDEÓS FORRÁSOK (YouTube) ───
+// A videó címe+kivonata önmagában semmit nem ér, ezért korábban üres körök mentek el rájuk.
+// Felirattal viszont teljes értékű forrás – főleg valós tapasztalatokhoz és hátrányokhoz.
+
+function isVideoUrl(url) {
+  return /youtube\.com\/(watch|shorts)|youtu\.be\//i.test(String(url));
+}
+
+// A szponzorált videó a hátrányokat jellemzően elhallgatja – ezt jelezzük a modellnek
+function looksSponsored(text) {
+  return /#ad\b|\bsponsored\b|paid partnership|szponzor|támogatta ezt a videót|együttműködésben készült|reklámegyüttműködés/i
+    .test(String(text || ''));
+}
+
+// Cikk dátumának becslése az URL-ből (pl. /2026/03/24/), ha a kereső nem adta meg
+function guessDateFromUrl(url) {
+  const m = String(url).match(/\/(20\d{2})[\/\-_](0[1-9]|1[0-2])(?:[\/\-_](0[1-9]|[12]\d|3[01]))?\//);
+  return m ? (m[3] ? `${m[1]}-${m[2]}-${m[3]}` : `${m[1]}-${m[2]}`) : '';
+}
+
+// Egy videós találat feldolgozása. Üres szöveget ad vissza, ha nincs használható felirat.
+async function browseVideo(r) {
+  if (!(window.desktopApi && window.desktopApi.ytTranscript)) return '';
+  let v = null;
+  try { v = await window.desktopApi.ytTranscript(r.url, 8000); }
+  catch (e) { return ''; }
+  if (!v || !v.transcript || v.transcript.length < 200) {
+    const okok = {
+      'nincs-felirat': 'nincs felirat a videóhoz',
+      'po-token-kellene': 'a YouTube védi ezt a feliratot',
+      'nem-talalt-api-kulcs': 'a YouTube oldala nem a szokásos',
+    };
+    const ok = (v && (okok[v.note] || v.note)) || 'nincs kinyerhető szöveg';
+    log(`    🎬 Videó kihagyva – ${ok}`, 'info');
+    return '';
+  }
+  const date = v.publishDate || '';
+  const sponsored = looksSponsored(v.description) || looksSponsored(v.transcript.slice(0, 1500));
+  log(`    🎬 Videó átirat: ${(v.title || r.title || '').slice(0, 50)} (${date || 'dátum ismeretlen'})`, 'info');
+  return `**${v.title || r.title}**\n` +
+    `Forrás: ${v.url}\n` +
+    `Forrás típusa: VIDEÓ${v.channel ? ' – csatorna: ' + v.channel : ''}${v.isAuto ? ' (gépi felirat, elírások lehetnek)' : ''}\n` +
+    `Közzétéve: ${date || 'ismeretlen'}\n` +
+    (sponsored ? 'Figyelem: SZPONZORÁLT tartalom jelei – a hátrányokat valószínűleg elhallgatja.\n' : '') +
+    `\nÁtirat:\n${v.transcript}`;
+}
+
 // Relevancia-előszűrés: a cím+kivonat alapján a Gemini kiválasztja a LEGJOBB találatokat,
 // így nem vakon az első N oldalt dolgozzuk fel, hanem a legígéretesebbeket
-async function pickBestResults(query, candidates, maxUrls) {
+async function pickBestResults(query, candidates, maxUrls, preferHu) {
   if (candidates.length <= maxUrls) return candidates;
   try {
     const list = candidates.map((r, i) =>
@@ -1133,10 +1457,12 @@ async function pickBestResults(query, candidates, maxUrls) {
     const system = 'Keresési találatok relevancia-bírálója vagy. Válaszd ki a kérdés megválaszolásához LEGRELEVÁNSABB találatokat. ' +
       'Előnyben: gyártói/hivatalos oldalak, adatlapok, tesztek, összehasonlító cikkek, árlisták. ' +
       'Kerüld: általános kategórialisták, témába nem vágó oldalak, duplikált hírek. ' +
-      'A találat nyelve NEM számít (angol/német/egyéb forrás is jó, ha releváns). ' +
+      (preferHu
+        ? 'MAGYAR PIACI kutatás: egyenlő relevancia esetén a magyar (.hu) találat élvez elsőbbséget, és ha van releváns .hu árlista, adatlap vagy importőri oldal, azt KÖTELEZŐEN válaszd ki. A nem magyar találatok is jók, ha műszaki adatot vagy tesztet hoznak. '
+        : 'A találat nyelve NEM számít (angol/német/egyéb forrás is jó, ha releváns). ') +
       'Válaszolj CSAK a kiválasztott sorszámokkal, vesszővel elválasztva.';
     const prompt = `Kérdés: ${query}\n\nTalálatok:\n${list}\n\nA ${maxUrls} legrelevánsabb találat sorszáma:`;
-    const out = await callGemini(prompt, system, { temp: 0.1, maxTokens: 100 });
+    const out = await callGemini(prompt, system, { temp: 0.1, maxTokens: 100, model: MODEL_CHEAP });
     const idx = (out.match(/\d+/g) || []).map(n => parseInt(n, 10) - 1)
       .filter(i => i >= 0 && i < candidates.length);
     const picked = [...new Set(idx)].slice(0, maxUrls).map(i => candidates[i]);
@@ -1151,15 +1477,21 @@ async function pickBestResults(query, candidates, maxUrls) {
 // Egy keresés végrehajtása: találatok + tartalom összegyűjtése
 async function browseQuery(query, huOnly, maxUrls = 4) {
   // Bővebb merítés, hogy a már látott oldalak kiszűrése után is maradjon új találat
-  let results = await researchSearch(query, maxUrls * 3 + 6);
+  let results = await researchSearch(query, maxUrls * 3 + 6, huOnly ? 'hungary' : '');
   if (huOnly) {
-    const allowed = ['youtube.com', 'youtu.be'];
-    results = results.filter(r => {
-      try {
-        const h = new URL(r.url).hostname.toLowerCase();
-        return h.endsWith('.hu') || allowed.some(a => r.url.includes(a));
-      } catch (e) { return false; }
-    });
+    // MAGYAR MÓD: a .hu találatok ELŐRE kerülnek, de a többit már nem dobjuk el.
+    // Ok: a magyar oldalak mélységét a Google grounding adja (a Google indexe a
+    // legjobb .hu-ban), a Tavily erőssége viszont a jellemzően NEM .hu szakmai
+    // oldalak teljes szövegének letöltése. A korábbi kemény szűrés pont ezt dobta el,
+    // így az angol/német keresőszavak a Tavily oldalán üresbe futottak.
+    const isHu = r => {
+      try { return new URL(r.url).hostname.toLowerCase().endsWith('.hu'); }
+      catch (e) { return false; }
+    };
+    const hu = results.filter(isHu);
+    const rest = results.filter(r => !isHu(r));
+    results = [...hu, ...rest];
+    log(`    🇭🇺 ${hu.length} magyar találat előre sorolva, ${rest.length} egyéb a sor végén`, 'info');
   }
   if (!results.length) return '';
   // Már letöltött oldalak kiszűrése: minden keresés ÚJ forrásokat dolgozzon fel
@@ -1174,7 +1506,7 @@ async function browseQuery(query, huOnly, maxUrls = 4) {
   if (skipped > 0) log(`    ♻️ ${skipped} már látott oldal kihagyva (új merítés)`, 'info');
   if (!candidates.length) return '';
   // A bő merítésből a legrelevánsabb oldalak kiválasztása (nem vakon az első N)
-  const picked = await pickBestResults(query, candidates, maxUrls);
+  const picked = await pickBestResults(query, candidates, maxUrls, huOnly);
   // Párhuzamos kereséseknél közben másik keresés már lefoglalhatta ugyanazt az URL-t → újraszűrés
   const slice = picked.filter(r => !researchSeenUrls.has(normalizeUrl(r.url)));
   if (!slice.length) return '';
@@ -1183,67 +1515,98 @@ async function browseQuery(query, huOnly, maxUrls = 4) {
   for (let i = 0; i < slice.length; i++) {
     const r = slice[i];
     log(`    [${i + 1}/${slice.length}] ${r.url.slice(0, 60)}...`, 'info');
-    let entry = `**${r.title}**\nForrás: ${r.url}\nKivonat: ${r.snippet}\n`;
-    if (!/youtube\.com|youtu\.be|tiktok\.com/.test(r.url)) {
-      // A Tavily keresés gyakran mellékeli a tiszta tartalmat – akkor nem töltünk le újra
-      let content = (r.content || '').slice(0, 3000);
-      if (!content) content = await researchFetch(r.url, 3000);
-      if (content) entry += `\nTartalom:\n${content}`;
+    // VIDEÓ: a felirat a valódi tartalom. Ha nincs felirat, a találatot eldobjuk,
+    // mert a puszta cím korábban üresen fogyasztotta el a köröket.
+    if (isVideoUrl(r.url)) {
+      const videoEntry = await browseVideo(r);
+      if (videoEntry) collected.push(videoEntry);
+      continue;
     }
+    if (/tiktok\.com/.test(r.url)) continue;
+    const date = r.published || guessDateFromUrl(r.url);
+    let entry = `**${r.title}**\nForrás: ${r.url}\n` +
+      `Forrás típusa: weboldal\nKözzétéve: ${date || 'ismeretlen'}\n` +
+      `Kivonat: ${r.snippet}\n`;
+    // A Tavily keresés gyakran mellékeli a tiszta tartalmat – akkor nem töltünk le újra
+    let content = (r.content || '').slice(0, 6000);
+    if (!content) content = await researchFetch(r.url, 6000);
+    if (content) entry += `\nTartalom:\n${content}`;
     collected.push(entry);
   }
   return collected.join('\n\n---\n\n');
 }
 
-// FÁZIS 1: feltérképező keresések tervezése
-async function planMarketMapping(topic) {
-  const system = 'Te egy piackutató szakértő vagy. Keresési kulcsszavakat TERVEZEL amikkel megtaláljuk az ÖSSZES elérhető opciót a piacon. NE konkrét opciókat keress, hanem összehasonlító cikkeket, toplistákat, áttekintő anyagokat. ' +
-    'FONTOS: a keresések legyenek TÖBBNYELVŰEK – magyar ÉS angol kifejezések vegyesen (a nemzetközi összehasonlítások és tesztek többnyire angolul vannak fent). ' +
-    (isChineseResearchOn() ? 'A felhasználó kínai forrásokat is kér: 2 keresés legyen EGYSZERŰSÍTETT KÍNAI nyelven (a kínai gyártói/nagykereskedelmi oldalak megtalálásához). ' : '') +
-    'Válaszolj CSAK a keresési kifejezésekkel, soronként egyet. Semmi más szöveget ne adj.';
-  const cnPlan = isChineseResearchOn();
-  const prompt = `Téma: ${topic}\n\nKészíts ${cnPlan ? '8-10' : '6-8'} keresési kifejezést (vegyesen magyar és angol${cnPlan ? ', plusz 2 kínai' : ''}) amik ÖSSZEHASONLÍTÓ CIKKEKET és TELJES LISTÁKAT találnak. NE egy-egy konkrét opciót keress, hanem olyat ami MINDEGYIKET felsorolja vagy összehasonlítja.\n\nKeresési kifejezések:`;
-  return parseQueryLines(await callGemini(prompt, system, { temp: 0.4, maxTokens: 700 })).slice(0, cnPlan ? 10 : 8);
-}
-
-// FÁZIS 1 eredménye: opciók/márkák kinyerése
-async function extractOptions(topic, mappingResults) {
-  const system = 'A feladatod: az összegyűjtött keresési eredményekből kinyerd az ÖSSZES konkrét opciót/márkát/terméket/szolgáltatót. Legyél teljes körű. Sorolj fel MINDENT amit találtál, röviden.';
-  const combined = mappingResults.map(r => r.slice(0, 1500)).join('\n---\n');
-  const prompt = `Téma: ${topic}\n\nKeresési eredmények:\n${combined}\n\nSorold fel az ÖSSZES talált opciót/márkát/terméket/szolgáltatót. Röviden, csak a neveket és ha van, az árat/jellemzőt. Semmit ne hagyj ki!`;
-  return await callGemini(prompt, system, { temp: 0.2, maxTokens: 1200 });
-}
-
-// FÁZIS 2: részletes keresések tervezése az opciókhoz
-async function planDetailSearches(topic, options) {
-  const system = 'Te egy piackutató vagy. Most minden egyes opcióhoz KONKRÉT keresést kell tervezned: ár, elérhetőség, jellemzők, vélemény, teszt. A keresések legyenek SPECIFIKUSAK. ' +
-    'Az ár/elérhetőség keresések legyenek magyarul, a műszaki adatok/tesztek/vélemények keresése ANGOLUL is történjen (pl. "[modell] review", "[modell] specifications"). ' +
-    'Válaszolj CSAK a keresési kifejezésekkel, soronként egyet.';
-  const prompt = `Téma: ${topic}\n\nEddig talált opciók:\n${options}\n\nKészíts 6-8 KONKRÉT keresést, amelyek a fenti opciókról részletes adatokat hoznak (ár, vélemény, elérhetőség).\n\nKeresési kifejezések:`;
-  return parseQueryLines(await callGemini(prompt, system, { temp: 0.4, maxTokens: 700 })).slice(0, 8);
-}
-
-// FÁZIS 3: szakértői elemzés és összefoglaló
-async function generateExpertAnalysis(topic, allData) {
-  const digestSystem = 'Tömörítsd egyetlen listává az összes talált TÉNYT: nevek, opciók, árak, jellemzők, fontos részletek. Csak tények, semmi magyarázat.';
-  const raw = allData.slice(0, 20).map(r => r.slice(0, 800)).join('\n\n---\n\n');
-  const facts = await callGemini(`Téma: ${topic}\n\nNyers adatok:\n${raw}\n\nTények listája (mindent szerepeltess, semmit ne hagyj ki!):`, digestSystem, { temp: 0.1, maxTokens: 2000 });
-  const system = 'Szakértő elemző vagy. NEM általánosságokat mondasz, hanem KONKRÉT, érthető tanácsot adsz a talált adatokból. A válasz szerkezete: "## 1. Áttekintés", "## 2. Elérhető opciók" (lista vagy táblázat árakkal és jellemzőkkel), "## 3. Összehasonlítás", "## 4. Ajánlás és döntéstámogatás", "## 5. Fontos tudnivalók". Ha valamiről nincs adat: írd "Erről nem találtam információt – érdemes közvetlenül utánajárni". Formátum: Magyar, Markdown.';
-  const prompt = `Téma: ${topic}\n\nÖsszegyűjtött tények:\n${facts}\n\nKészíts TELJES SZAKÉRTŐI ELEMZÉST a fenti struktúra szerint.`;
-  return await callGemini(prompt, system, { temp: 0.3, maxTokens: 4000 });
-}
-
-// EGYSZERŰ MÓD: közvetlen, tényszerű válasz a talált forrásokból
+// VÁLASZÍRÁS: közvetlen, tényszerű válasz az összegyűjtött tényekből
 async function generateSimpleAnswer(topic, data) {
-  // FONTOS: a hívók néha EGY nagy összefűzött szöveget adnak át (önálló mélykutatás),
-  // néha több külön forrást. Ezért teljes karakter-keretet használunk, nem per-elem vágást,
-  // különben egyetlen nagy szöveg az első ~1200 karakterre csonkulna (kevés/gyenge válasz).
-  const raw = (Array.isArray(data) ? data : [data]).join('\n\n---\n\n').slice(0, 16000);
-  const system = 'Hűtéstechnikai szakértő asszisztens vagy. A felhasználó kérdésére adj KONKRÉT, érthető és pontos választ KIZÁRÓLAG a megadott forrásokból. Ne találj ki adatot. Ha valamire nincs információ, írd: "Erről nem találtam megbízható információt". ' +
-    'A fontos állításoknál add meg a forrást Markdown linkként, ha a tényeknél szerepel [forrás: URL]. ' +
-    'Formátum: tömör magyar Markdown, ahol indokolt felsorolással. Ne erőltess összehasonlító táblázatot, ha a kérdés nem azt kéri.';
-  const prompt = `Kérdés/téma: ${topic}\n\nTalált források:\n${raw}\n\nVálaszolj a kérdésre a források alapján, lényegre törően.`;
-  return await callGemini(prompt, system, { temp: 0.3, maxTokens: 3500 });
+  // A keret ARÁNYOSAN oszlik el a részek (körök) között: egyetlen nagy szöveg a teljes
+  // keretet megkapja, több kör tényei viszont MIND képviselve lesznek. A régi fejvágás
+  // a későbbi (legfrissebb) körök tényeit teljesen eldobta a válaszból.
+  // 34 000: a tömörítés körönként ~18 000 karakter tényt adhat ki, tehát 22 000-nél már
+  // két kör tényei sem fértek be – a frissen kinyert adatot vesztettük el a végén.
+  const raw = joinWithBudget(Array.isArray(data) ? data : [data], 34000);
+  const compare = isCompareOn();
+  const system = 'Kutató asszisztens vagy. A felhasználó kérdésére adj KONKRÉT, érthető és pontos választ a megadott forrásokból. ' +
+    'Ha valamire nincs információ, írd: "Erről nem találtam megbízható információt". ' +
+    GROUNDING_RULES + ' ' + PRACTICAL_ADVICE_RULES + ' ' +
+    (compare
+      ? COMPARE_STRUCTURE + ' Formátum: magyar Markdown.'
+      : 'Formátum: magyar Markdown, ahol indokolt felsorolással. Ne erőltess összehasonlító táblázatot, ha a kérdés nem azt kéri.');
+  const prompt = `Kérdés/téma: ${topic}\n\nTalált források:\n${raw}\n\n` +
+    (compare
+      ? 'Készíts TELJES SZAKÉRTŐI ELEMZÉST a megadott ötpontos szerkezet szerint.'
+      : 'Válaszolj a kérdésre a források alapján: érthetően, a döntéshez szükséges részletességgel. Ne csak adatokat sorolj – a lényeges összefüggéseket is fejtsd ki.');
+  const answer = await callGemini(prompt, system, { temp: 0.3, maxTokens: 5000 });
+  return await verifyAnswer(topic, raw, answer);
+}
+
+// TÉNYELLENŐRZÉS: a kész választ visszaadjuk a modellnek a forrásokkal együtt,
+// és kiszedetjük/megjelöltetjük vele azt, ami nem szerepel a forrásokban.
+// Ez fogja meg a "magabiztosan kitalált" adatokat (nyelvi támogatás, ár, modellnév stb.).
+async function verifyAnswer(topic, sourcesText, answer) {
+  if (!isVerifyOn() || !answer || !sourcesText) return answer;
+  try {
+    log('  🔍 Tényellenőrzés a források ellen...', 'info');
+    const system = `Szigorú tényellenőr vagy. Ma a dátum: ${todayISO()}. Megkapod a FORRÁSOKAT és egy rájuk épülő VÁLASZT. ` +
+      'Ellenőrizd a válasz MINDEN konkrét állítását (nevek, modellek, verziók, árak, számok, licencek, támogatott nyelvek, teszteredmények): ' +
+      'szerepel-e szó szerint a forrásokban. ' +
+      '1) Ami ellentmond a forrásoknak: javítsd a forrás szerint. ' +
+      '2) Ami egyáltalán nem szerepel a forrásokban: töröld, vagy ha a válasz szempontjából fontos, jelöld meg így: "⚠️ nem találtam rá forrást". ' +
+      '3) Ne írj hozzá új információt, ne írd át a stílust, a jó részeket hagyd változatlanul. ' +
+      '4) Ha egy állítás csak egyetlen gyenge forrásból (blog/SEO-gyűjtőoldal) jön, tedd mellé: "(csak egy forrás, ellenőrizendő)". ' +
+      '5) FORRÁS-RANGSOR: ha egy árat/verziót/nyelvi listát a válasz blogból vagy review-oldalból idéz, DE a források között ott van a hivatalos gyártói oldal is ugyanerről, ' +
+      'akkor írd át a hivatalos adatra és a hivatalos URL-re. Ellentmondás esetén a hivatalos nyer. ' +
+      '6) HAMIS "HIVATALOS" JELÖLÉS: ellenőrizd minden "hivatalos forrás" jelölésnél, hogy az URL tényleg a gyártó saját fő doménje-e. ' +
+      'A márkanevet utánzó domének (márkanév + extra szó vagy más végződés, pl. "...ai.us"), az affiliált és a katalógus-oldalak NEM hivatalosak: ' +
+      'ilyenkor vedd le róluk a "hivatalos" jelzőt, és tedd mellé: "(nem hivatalos forrás, ellenőrizendő)". ' +
+      '7) MŰSZAKI VALÓSZÍNŰTLENSÉG: ha egy állítás olyan alkatrészre vagy tünetre hivatkozik, ami a jármű ismert hajtáslánc-típusával nem fér össze ' +
+      '(pl. "osztómű"/"váltófokozat-csúszás" egy egyfokozatú, nem 4x4 elektromos autónál), tedd mellé: "(műszakilag valószínűtlen ezen a hajtáslánc-típuson, ellenőrizendő)", ' +
+      'és ne vedd át kritika nélkül a hozzá kapcsolt konkrét javítási költséget. ' +
+      '8) ÉVJÁRAT/GENERÁCIÓ-KEVEREDÉS: ha egy felsorolás elemei (pl. felszereltségi szintek, típusváltozatok) egymástól ELTÉRŐ dátumú vagy más piacra vonatkozó ' +
+      'forrásból származnak, ezt jelezd az adott elemnél (pl. "(másik/korábbi forrásból, lehet, hogy más évjáratra vagy piacra vonatkozik)"), ne mosd össze egységes, aktuális kínálatként. ' +
+      '9) KÜLÖNÖSEN FONTOS: ha a téma/kérdés konkrét feltételt tartalmaz (pl. magyar nyelv, árkeret, méret), ellenőrizd, hogy a forrás EZT A FELTÉTELT igazolja-e. ' +
+      'Egy általános szám vagy állítás ("27 nyelv", "90+ nyelv", "számos országban") NEM igazolja a konkrét feltételt – ilyenkor írd oda: "a forrás ezt a kért feltételre nem erősíti meg". ' +
+      '10) LEJÁRT HATÁRIDŐ: ha a válasz olyan lehetőséget közöl elérhetőként (pályázat, támogatás, akció, kedvezmény, előjegyzés, kampány, érvényes árlista vagy ajánlat), ' +
+      'amelynek a forrásban szereplő határideje vagy érvényességi ideje a MAI dátumhoz képest már elmúlt, akkor írd át: nevezd LEJÁRTNAK, és add meg a határidő dátumát. ' +
+      'Ha a lehetőségnek jellemzően van határideje, de a forrásokból nem derül ki, tedd mellé: "(a határidőt a forrás nem közli, ellenőrizendő)". ' +
+      '11) KÖVETKEZTETÉS ÉS TAPASZTALAT: a forrásokból LEVONT következtetést, ajánlást vagy összegzést (pl. "kinek érdemes, kinek nem") NE töröld csak azért, ' +
+      'mert szó szerint nem szerepel a forrásokban – ez a válasz értelmes része. Azt viszont ellenőrizd, hogy a benne hivatkozott KONKRÉT számok és tények stimmelnek-e. ' +
+      'Ugyanígy a fórumból, tesztből vagy videóból vett gyakorlati tapasztalatot is hagyd meg, ha van rá forrás – de ne emeld tényrangra: ' +
+      'az ilyen állítás maradjon tapasztalatként megfogalmazva (pl. "a beszámolók szerint"). ' +
+      'A válaszod KIZÁRÓLAG a javított szöveg legyen, bevezető és megjegyzés nélkül.';
+    // A keret EGYEZZEN a generateSimpleAnswer keretével: ha az ellenőrző kevesebb forrást
+    // lát, mint amiből a válasz készült, akkor helyes adatokat jelölne meg forrás nélkülinek.
+    const prompt = `Téma: ${topic}\n\nFORRÁSOK:\n${String(sourcesText).slice(0, 34000)}\n\nELLENŐRZENDŐ VÁLASZ:\n${answer}\n\nA javított válasz:`;
+    const fixed = await callGemini(prompt, system, { temp: 0.1, maxTokens: 6000 });
+    // Biztonsági fék: ha az ellenőrző csonka/üres szöveget adna vissza, marad az eredeti.
+    if (!fixed || fixed.length < answer.length * 0.4) {
+      log('    ⚠️ A tényellenőrzés eredménye gyanúsan rövid – az eredeti választ tartom meg.', 'warn');
+      return answer;
+    }
+    return fixed;
+  } catch (e) {
+    log(`    ⚠️ Tényellenőrzés kihagyva: ${e.message}`, 'warn');
+    return answer;
+  }
 }
 
 // ===== AUTONÓM MÉLYKUTATÁS (Plan → Search → Reflect → Write) =====
@@ -1251,38 +1614,166 @@ async function generateSimpleAnswer(topic, data) {
 // Kezdő keresési kérdések tervezése
 async function planInitialQueries(topic) {
   const system = 'Kutatástervező vagy. A felhasználó témájához készíts 5-6 kezdő keresési kifejezést, amik a legfontosabb alapinformációkat hozzák. ' +
+    `Ma a dátum: ${todayISO()}. Árat, árlistát, modellévet, támogatást/pályázatot MINDIG az aktuális évre keress (tegyél be évszámot a kifejezésbe). ` +
+    (isEnumerationQuestion(topic)
+      ? 'A kérdés TELJES FELSOROLÁST kér: a piacot SZEGMENSENKÉNT fedezd be – külön keresés a fő kategóriákra, ÉS kötelezően külön keresés a kevésbé ismert/olcsó/kínai/új belépő szereplőkre és niche importőrökre. Ne elégedj meg a népszerű márkákkal. '
+      : '') +
     'FONTOS: a keresések legyenek TÖBBNYELVŰEK – kb. fele magyar, fele ANGOL nyelvű (a műszaki anyagok többsége angolul érhető el). ' +
     'Ha a témához releváns (pl. európai gyártók), 1 keresés lehet NÉMET is. ' +
+    'LEGALÁBB EGY keresés a hivatalos adatok helyett a GYAKORLATI TAPASZTALATRA menjen: mit írnak azok, akik már megtették – ' +
+    'fórum, valós felhasználói beszámoló, buktatók, tapasztalatok, "mire figyelj" jellegű írások. Ez adja a döntéshez a hátteret. ' +
     (isChineseResearchOn() ? 'A felhasználó kínai forrásokat is kér: 2 keresés legyen EGYSZERŰSÍTETT KÍNAI nyelven (kínai gyártói adatlapok, specifikációk megtalálásához). ' : '') +
     'Válaszolj CSAK a keresési kifejezésekkel, soronként egyet, semmi más szöveget.';
   const cnPlan = isChineseResearchOn();
   const prompt = `Téma: ${topic}\n\nKezdő keresési kifejezések (vegyesen magyar és angol${cnPlan ? ', plusz 2 kínai' : ''}):`;
-  return parseQueryLines(await callGemini(prompt, system, { temp: 0.4, maxTokens: 500 })).slice(0, cnPlan ? 8 : 6);
+  return parseQueryLines(await callGemini(prompt, system, { temp: 0.4, maxTokens: 500, model: MODEL_CHEAP })).slice(0, cnPlan ? 8 : 6);
 }
 
-// Egy kör nyers adatának tömörítése tényekké (a kontextus kordában tartására)
-async function condenseFacts(topic, roundText) {
+// Hosszú szövegrészek IGAZSÁGOS rövidítése egy karakter-keretbe.
+// Miért kell: a régi `parts.join(...).slice(0, N)` fejvágás a lista VÉGÉN álló
+// darabokat TELJESEN eldobta – és a körökben pont a Google grounding eredménye
+// (és az utolsó keresések találatai) állnak a végén. Itt minden darab arányos
+// részt kap, tehát mindegyik képviselve lesz. Egyetlen darab a teljes keretet kapja.
+function joinWithBudget(parts, budget) {
+  const list = (parts || []).filter(Boolean).map(String);
+  if (!list.length) return '';
+  const sep = '\n\n---\n\n';
+  const joined = list.join(sep);
+  if (joined.length <= budget) return joined;
+  const room = Math.max(0, budget - sep.length * (list.length - 1));
+  const per = Math.max(500, Math.floor(room / list.length));
+  return list.map(c => (c.length > per ? c.slice(0, per) + '\n…[itt levágva]' : c)).join(sep);
+}
+
+// Egy kör nyers adatának tömörítése tényekké (a kontextus kordában tartására).
+// A roundParts a kör darabjai (keresésenként egy + a grounding), NEM előre összefűzve.
+//
+// MIÉRT DARABONKÉNTI A KERET: a régi FIX 60 000 karaktert a joinWithBudget SZÉTOSZTOTTA a
+// darabok között, tehát minél több keresés futott egy körben, annál kevesebb jutott
+// mindegyikre. 6 keresés + grounding esetén ez darabonként ~8 500 karakter volt, miközben
+// egy keresés 8 letöltött oldala ~26 000 karaktert hozott: a letöltött (és kifizetett)
+// tartalom kétharmadát eldobtuk, mielőtt a modell egyáltalán látta volna.
+// Darabonkénti kerettel a keresések nem éheztetik egymást. A tömörítés az OLCSÓ modellen
+// fut (0,30 $/1M bemenet), ezért ez a bővítés körönként csak néhány tized centbe kerül.
+const ROUND_FACT_BUDGET_PER_PART = 26000;
+const ROUND_FACT_BUDGET_MIN = 60000;
+const ROUND_FACT_BUDGET_MAX = 220000;
+async function condenseFacts(topic, roundParts) {
   const system = 'Tömörítsd a forrásokból a témához kapcsolódó KONKRÉT TÉNYEKET rövid felsorolásba: nevek, árak, adatok, jellemzők, fontos állítások. ' +
+    'A számadatok mellett ŐRIZD MEG a GYAKORLATI TAPASZTALATOT is (fórum, teszt, felhasználói beszámoló, videó): ' +
+    'valós használati élmény, buktatók, rejtett vagy utólagos költségek, gyakori hibák, bevált trükkök és tanácsok, csalódások. ' +
+    'Az ilyen sorokat kezdd így: "TAPASZTALAT:" – ez ugyanolyan értékes, mint egy szám, mert a döntéshez ez adja a hátteret. ' +
     'A tényeket MAGYARUL írd, akkor is, ha a forrás angol/német/kínai/más nyelvű. ' +
-    'Minden tény végére írd oda a forrás URL-jét így: [forrás: URL]. ' +
-    'Csak tények, magyarázat nélkül. Ami nem kapcsolódik a témához, hagyd ki.';
-  const prompt = `Téma: ${topic}\n\nForrások:\n${roundText.slice(0, 14000)}\n\nTények (mindegyik végén [forrás: URL]):`;
-  return await callGemini(prompt, system, { temp: 0.1, maxTokens: 2000 });
+    'Minden tény végére írd oda a forrás URL-jét így: [forrás: URL], és ha a forrásnál szerepel a "Közzétéve:" dátum, azt is így: [dátum: ÉÉÉÉ-HH-NN]. ' +
+    'Ez fontos, mert az ár/akció/támogatás jellegű tények csak a dátumukkal együtt értékelhetők. ' +
+    'Ne írj általános bevezetőt vagy összegzést, és ami nem kapcsolódik a témához, azt hagyd ki. ' +
+    'Ha ugyanazt az adatot (pl. ár, csomag, nyelvi lista) hivatalos gyártói oldal ÉS blog is állítja, a HIVATALOS adatot őrizd meg, és jelöld: [hivatalos forrás: URL]. ' +
+    'Hivatalosnak CSAK a gyártó saját fő doménjét tekintsd – a márkanevet utánzó (márkanév + extra szó/más TLD), affiliált vagy katalógus-oldalak NEM hivatalosak. ' +
+    VIDEO_SOURCE_RULES + ' ' +
+    'A válasz LEGVÉGÉN adj ki EGY külön sort így: "FELSOROLT TÉTELEK: elem1, elem2, elem3" – ' +
+    'ide a témába vágó KONKRÉT nevek kerüljenek (márka, típus, cég, termék), amik a forrásokban megjelentek, vesszővel elválasztva.';
+  const parts = Array.isArray(roundParts) ? roundParts : [roundParts];
+  const budget = Math.min(ROUND_FACT_BUDGET_MAX,
+    Math.max(ROUND_FACT_BUDGET_MIN, parts.length * ROUND_FACT_BUDGET_PER_PART));
+  const roundText = joinWithBudget(parts, budget);
+  const prompt = `Téma: ${topic}\n\nForrások:\n${roundText}\n\nTények (mindegyik végén [forrás: URL] és [dátum: ...]):`;
+  return await callGemini(prompt, system, { temp: 0.1, maxTokens: 4500, model: MODEL_CHEAP });
+}
+
+// MÉLYÍTŐ keresések: akkor kell, ha a reflexió túl korán mondaná, hogy KÉSZ,
+// de a felhasználó még sok kört engedélyezett (alaposabb kutatást kért).
+async function planDeepeningQueries(topic, factsSoFar) {
+  const system = `Kutatásmélyítő vagy. Ma a dátum: ${todayISO()} – árat/árlistát az aktuális évre keress. ` +
+    'Az eddigi tények már megvannak – a feladatod, hogy a kutatást MÉLYÍTSD. ' +
+    'Javasolj 3-4 ÚJ keresést, amik olyat hoznak, ami eddig NEM szerepel – de KIZÁRÓLAG a KÉRDÉS TÁRGYÁN BELÜL. ' +
+    'A mélyítés iránya a kérdés JELLEGÉHEZ illeszkedjen: adózási/pénzügyi/jogi kérdésnél jogszabály, hatósági (NAV, kormányzati) forrás, konkrét számpélda, feltételek és határidők, finanszírozási konstrukciók; ' +
+    'termékválasztásnál konkrét árak/csomagok, független tesztek, valós felhasználói vélemények (fórum, Reddit), HÁTRÁNYOK és korlátok, kevésbé ismert alternatívák; műszaki kérdésnél gyártói adatlap és üzemi adatok. ' +
+    'Ha a téma konkrét feltételt tartalmaz (pl. magyar nyelv), legyen olyan keresés, ami KIFEJEZETTEN ezt a feltételt ellenőrzi (pl. hivatalos nyelvi lista). ' +
+    'Ne ismételd a már meglevő irányokat. Válaszolj CSAK a keresési kifejezésekkel, soronként egyet.';
+  const prompt = `Téma: ${topic}\n\nEddigi tények (részlet):\n${String(factsSoFar).slice(-9000)}\n\nMélyítő keresések:`;
+  return parseQueryLines(await callGemini(prompt, system, { temp: 0.5, maxTokens: 400, model: MODEL_CHEAP })).slice(0, 4);
 }
 
 // Önreflexió: elég-e az eddigi adat? Ha nem, új kereséseket javasol
+// A askedQueries a MÁR LEFUTOTT keresések – hogy ne javasolja ugyanazt újra (hurokellenes).
 // Visszaad: { done: bool, queries: [] }
-async function reflectGaps(topic, factsSoFar, round) {
+async function reflectGaps(topic, factsSoFar, round, maxRounds, askedQueries, saturation) {
+  // A felhasználó által beállított körszám szándék: ha 12 kört kért, ne álljunk le 2 után.
+  // De a kötelező minimum LEGALÁBB 2 kör, nem 3: a kényszerített 3. kör korábban arra
+  // vitte az ügynököt, hogy a kérdés tárgyától eltérő (teszt/versenytárs) kereséseket
+  // gyártson, aminek az eredménye a válaszban már nem is jelent meg.
+  // KIVÉTEL továbbra is: ha a kutatás telítődött (2 egymást követő kör nem hozott új tételt),
+  // a további körök csak pazarlás.
+  const minRounds = Math.min(maxRounds, Math.max(2, Math.ceil(maxRounds / 3)));
+  const mustContinue = round < minRounds && (saturation || 0) < 2;
   const system = 'Kutatási minőség-ellenőr vagy. Megkapod a témát és az eddig összegyűjtött tényeket. Döntsd el, elég-e ez a téma ALAPOS megválaszolásához. Ha IGEN, válaszolj pontosan ennyivel: KÉSZ. Ha NEM, sorold fel 2-4 ÚJ, célzott keresési kifejezést, amik a HIÁNYZÓ információt pótolják (soronként egy, semmi más szöveg). ' +
+    `Ez a ${round}. kör a maximum ${maxRounds}-ból. Ma a dátum: ${todayISO()} – árat/árlistát az aktuális évre keress. ` +
+    (mustContinue
+      ? `A felhasználó kifejezetten ALAPOS, ${maxRounds} körös mélykutatást kért, ezért MOST NEM válaszolhatod azt, hogy KÉSZ. ` +
+        'Kötelezően javasolj 2-4 ÚJ, MÉLYÍTŐ keresést – de KIZÁRÓLAG a KÉRDÉS TÁRGYÁN BELÜL. ' +
+        'A mélyítés iránya a kérdés JELLEGÉHEZ illeszkedjen: adózási/pénzügyi/jogi kérdésnél jogszabály, hatósági (NAV, kormányzati) forrás, konkrét számpélda, feltételek és határidők, finanszírozási konstrukciók; ' +
+        'termékválasztásnál konkrét árak és csomagok, független tesztek, felhasználói vélemények, hátrányok, alternatívák; műszaki kérdésnél gyártói adatlap és üzemi adatok. ' +
+        'TILOS a kérdés tárgyától eltérni csak azért, hogy legyen új keresés: ha a kérdés egy KONKRÉT dologra vonatkozik, a keresések ne váltsanak át más termékre, más szereplőre vagy a kérdéshez nem tartozó szempontra. '
+      : 'Csak akkor írd, hogy KÉSZ, ha a KÉRDÉS megválaszolásához szükséges minden fontos oldal le van fedve: a konkrét adatok (nevek, árak, feltételek, határidők), ' +
+        'a kérdés szempontjából érdemi ellenérvek és korlátok, valamint a kérdésben szereplő konkrét feltétel (pl. magyar nyelv) HIVATALOS forrásból való igazolása. ' +
+        'A témához NEM tartozó szempontok hiánya NEM ok a folytatásra. ') +
+    'Ha a téma konkrét feltételt tartalmaz (pl. magyar nyelv) és azt eddig csak általános marketingszöveg támasztja alá, az NEM elég – keress hivatalos, tételes listát. ' +
+    'ISMERETLEN DÁTUMÚ adat (pl. a tényeknél nincs [dátum: ...]) ár/akció/támogatás esetén NEM elég – olyankor célzottan keress friss (aktuális évi) forrást rá. ' +
+    'A lefutott keresések listája lent olvasható: NE javasolj hozzájuk hasonlót vagy átfogalmazást, mert azok már nem hoztak eredményt – a hiányt ÚJ SZÖGLETBŐL közelítsd meg. ' +
+    ((saturation || 0) >= 2
+      ? `TELÍTŐDÉSI JELZÉS: az utolsó ${saturation} kör NEM hozott egyetlen új tételt sem – a teret valószínűleg bejártuk. Ha a tartalmi lefedettség rendben van, válaszolhatsz KÉSZ-t. `
+      : '') +
     'NYELVI STRATÉGIA: ha a magyar keresések nem hoztak elég adatot, az új keresések legyenek ANGOLUL (műszaki adatok, tesztek) vagy NÉMETÜL (európai gyártók). ' +
     (isChineseResearchOn()
       ? 'A felhasználó kínai forrásokat is kér: kínai gyártó termékénél nyugodtan javasolj EGYSZERŰSÍTETT KÍNAI nyelvű keresést is (gyártói adatlapok, hazai piaci infók).'
       : 'Kínai gyártó termékénél ANGOLUL keress (az export-anyagaik angolul vannak fent); kínai nyelvű keresést csak végső esetben javasolj, ha angolul sem található adat.');
-  const prompt = `Téma: ${topic}\n\nEddigi tények:\n${factsSoFar.slice(0, 9000)}\n\nElég ez? Ha igen: KÉSZ. Ha nem: új keresések:`;
-  const out = await callGemini(prompt, system, { temp: 0.3, maxTokens: 400 });
-  if (/^\s*KÉSZ\s*$/i.test(out) || /\bKÉSZ\b/i.test(out.split('\n')[0] || '')) return { done: true, queries: [] };
-  const queries = parseQueryLines(out).filter(q => !/^kész$/i.test(q)).slice(0, 4);
+  // A tények VÉGÉT adjuk át: sok körnél az elejét vágni azt jelentené, hogy a friss köröket nem látja.
+  const askedList = (askedQueries && askedQueries.length)
+    ? '\n\nMár lefutott keresések (ezeket és hasonlóikat NE javasold):\n' + askedQueries.slice(-24).map(q => '- ' + q).join('\n')
+    : '';
+  const prompt = `Téma: ${topic}\n\nEddigi tények:\n${String(factsSoFar).slice(-12000)}${askedList}\n\nElég ez? Ha igen: KÉSZ. Ha nem: új keresések:`;
+  const out = await callGemini(prompt, system, { temp: 0.3, maxTokens: 400, model: MODEL_CHEAP });
+  const saysDone = /^\s*KÉSZ\s*$/i.test(out) || /\bKÉSZ\b/i.test(out.split('\n')[0] || '');
+  // Duplikátum- és újrajavaslat-szűrés a normalizált alakkal (idézőjel/ékezet nem számít)
+  const askedKeys = new Set((askedQueries || []).map(normalizeQuery));
+  const seenHere = new Set();
+  let queries = parseQueryLines(out)
+    .filter(q => !/^kész$/i.test(q))
+    .filter(q => {
+      const k = normalizeQuery(q);
+      if (askedKeys.has(k) || seenHere.has(k)) return false;
+      seenHere.add(k);
+      return true;
+    })
+    .slice(0, 4);
+  if (mustContinue) {
+    // Nem fogadjuk el a korai leállást – ha nem adott új irányt, kérünk mélyítő kereséseket
+    if (!queries.length) {
+      log(`    ⬇️ Korai "KÉSZ" (${round}/${minRounds}. kör) – mélyítő kereséseket kérek.`, 'warn');
+      queries = await planDeepeningQueries(topic, factsSoFar);
+    }
+    return { done: queries.length === 0, queries };
+  }
+  if (saysDone) return { done: true, queries: [] };
   return { done: queries.length === 0, queries };
+}
+
+// TELJESSÉGI ELLENŐRZÉS – a „független újraszámlálás" ötlete alapján (Ko-WideSearch).
+// Felsorolás-módban a válasz előtt egy friss szemléletű, „ördög ügyvédje" hívás megkeresi,
+// mely ISMERT szereplők hiányozhatnak a megtalált listából, és csak azokra keresünk rá.
+async function auditCompleteness(topic, factsSoFar) {
+  const system = 'Szigorú piackutatás-bíró vagy, aki KIZÁRÓLAG a TELJESSÉGET vizsgálja. ' +
+    `Ma a dátum: ${todayISO()} – a keresési kifejezésbe tedd bele az aktuális évet. ` +
+    'Megkapod a témát és az eddig FELSOROLT tételeket. A feladatod NEM a tartalom javítása, hanem a hiányok felderítése. ' +
+    'Sorolj fel olyan KONKRÉT, valóban létező szereplőket (márka, típus, cég, termék), amik a téma szerint JOGOSAN szerepelnének, ' +
+    'de az eddigi listából hiányoznak – tipikusan: kevésbé ismert/olcsó/kínai alternatívák, új belépők, niche importőrök, hasonmás-márkák, prémium szereplők. ' +
+    'Minden ilyen gyanús hiányra adj EGY célzott keresési kifejezést, ami ellenőrzi, hogy tényleg létezik-e és a feltételnek megfelel-e (soronként egyet, max 4). ' +
+    'Ha nem tudsz konkrét, megalapozott hiányt megnevezni, válaszolj pontosan ennyivel: KÉSZ. ' +
+    'Ne sorold fel újra a már megtalált tételeket, és ne találj ki nem létező márkát.';
+  const prompt = `Téma: ${topic}\n\nEddig megtalált tételek és tények:\n${String(factsSoFar).slice(-10000)}\n\nGyanús hiányokra célzott keresések (vagy KÉSZ):`;
+  const out = await callGemini(prompt, system, { temp: 0.4, maxTokens: 400, model: MODEL_CHEAP });
+  if (/^\s*KÉSZ\s*$/i.test(out)) return [];
+  return parseQueryLines(out).filter(q => !/^kész$/i.test(q)).slice(0, 4);
 }
 
 // HIBRID: a Gemini beépített Google-keresése (grounding) kiegészíti a Tavily találatokat.
@@ -1291,9 +1782,12 @@ async function groundedRoundFacts(topic, queries) {
   try {
     const system = 'Piackutató asszisztens vagy, aki a Google keresőt használja. KIZÁRÓLAG a Google találatokból dolgozz, ne találj ki adatot. ' +
       'Gyűjts KONKRÉT tényeket: nevek, modellek, árak, műszaki adatok. Bármilyen nyelvű forrás jó, de a tényeket MAGYARUL írd. ' +
+      'A számadatok mellett keresd a GYAKORLATI TAPASZTALATOT is – a Google a fórumokat és a felhasználói beszámolókat is megtalálja: ' +
+      'bevált fogások, buktatók, rejtett vagy utólagos költségek, gyakori hibák, mire kell figyelni az ügyintézésnél. ' +
+      'Az ilyen sorokat kezdd így: "TAPASZTALAT:". ' +
       'Tömör felsorolás, minden tény után a forrás URL így: [forrás: URL].';
     const prompt = `Téma: ${topic}\n\nKeresendő kérdések:\n${queries.map(q => '- ' + q).join('\n')}\n\nGyűjtsd össze a Google találatokból a konkrét tényeket:`;
-    const { text, sources } = await callGeminiGrounded(prompt, system, { temp: 0.2, maxTokens: 2000 });
+    const { text, sources } = await callGeminiGrounded(prompt, system, { temp: 0.2, maxTokens: 6000 });
     if (!text) return '';
     let out = `**Google Search (grounding) találatok:**\n${text}`;
     if (sources && sources.length) out += `\n\nForrások:\n${sources.map(s => `- ${s.title}: ${s.url}`).join('\n')}`;
@@ -1307,6 +1801,11 @@ async function runAutonomousResearch(topic, huOnly, maxRounds) {
   log(`\n🤖 Önálló mélykutatás: ${topic} (max ${maxRounds} kör)`, 'info');
   const factsParts = [];
   const seenQueries = new Set();
+  const entitySet = new Set(); // megtalált márkák/típusok – a telítődés mérője
+  const enumeration = isEnumerationQuestion(topic);
+  let saturation = 0;
+  let roundsDone = 0;
+  if (enumeration) log('  📋 Felsorolás-mód: szegmenses terv + telítődés-figyelés + teljességi ellenőrzés a végén.', 'info');
 
   // 1. kör: tervezés
   log('  📝 Kezdő terv készítése...', 'info');
@@ -1316,25 +1815,44 @@ async function runAutonomousResearch(topic, huOnly, maxRounds) {
   for (let round = 1; round <= maxRounds; round++) {
     if (stopResearchRequested) { log('  ⏹️ Kérésre leállítva – válasz írása az eddigi adatokból.', 'warn'); break; }
     log(`\n  🔄 ${round}. kör – keresések:`, 'info');
+    roundsDone = round;
     const newQueries = queries.filter(q => {
-      const key = q.toLowerCase().trim();
+      const key = normalizeQuery(q);
       if (seenQueries.has(key)) return false;
       seenQueries.add(key);
       return true;
     });
     newQueries.forEach(q => log(`    🔎 ${q}`, 'info'));
     // PÁRHUZAMOS végrehajtás: a kör összes keresése + a Google grounding EGYSZERRE fut
-    const tasks = newQueries.map(q => browseQuery(q, huOnly, 6).catch(() => ''));
+    const tasks = newQueries.map(q => browseQuery(q, huOnly, 8).catch(() => ''));
     if (newQueries.length) tasks.push(groundedRoundFacts(topic, newQueries));
     const roundChunks = (await Promise.all(tasks)).filter(Boolean);
     setProgress(Math.min(15 + round * Math.round(70 / maxRounds), 85));
 
     if (roundChunks.length) {
       log('    🧠 Adatok tömörítése...', 'info');
-      const facts = await condenseFacts(topic, roundChunks.join('\n\n---\n\n'));
+      // HIBATŰRÉS: ha egy kör tömörítése elhasal (pl. megszakad a net), az NEM ok arra,
+      // hogy az egész kutatás és a korábbi körök munkája elvesszen. Ilyenkor a kör nyers
+      // forrásszövegét viszi tovább rövidítve, és a kutatás folytatódik.
+      let facts = '';
+      try {
+        facts = await condenseFacts(topic, roundChunks);
+      } catch (e) {
+        log(`    ⚠️ A kör tömörítése nem sikerült (${e.message}) – a nyers forrásszöveggel folytatom.`, 'warn');
+        facts = joinWithBudget(roundChunks, 6000);
+      }
       if (facts) {
         factsParts.push(`### ${round}. kör\n${facts}`);
         updateLiveResearch(factsParts.join('\n\n'));
+        // Márka/típus-nyilvántartás: az ÚJ tételek száma a megbízható leállási jelzés
+        const newEnts = parseEntityLine(facts).filter(e => {
+          const k = normalizeQuery(e);
+          if (entitySet.has(k)) return false;
+          entitySet.add(k); return true;
+        });
+        saturation = newEnts.length ? 0 : saturation + 1;
+        if (newEnts.length) log(`    🆕 ${newEnts.length} új tétel: ${newEnts.slice(0, 8).join(', ')}`, 'info');
+        else log(`    ⏸️ Új tétel nem jött (${saturation}. kör egymás után) – a tér kifutóban.`, 'info');
       }
     } else if (!factsParts.length && round === 1) {
       throw new Error('Nem találtam forrásokat. Ellenőrizd a Tavily kulcsot vagy az internetkapcsolatot.');
@@ -1346,7 +1864,16 @@ async function runAutonomousResearch(topic, huOnly, maxRounds) {
     // Önreflexió: van-e még hiány?
     log('    🤔 Elég-e már az adat? (önellenőrzés)', 'info');
     const factsSoFar = factsParts.join('\n\n');
-    const { done, queries: newQ } = await reflectGaps(topic, factsSoFar, round);
+    let done = false, newQ = [];
+    try {
+      const res = await reflectGaps(topic, factsSoFar, round, maxRounds, [...seenQueries], saturation);
+      done = res.done; newQ = res.queries;
+    } catch (e) {
+      // Az önellenőrzés csak a folytatásról dönt – ha elhasal, inkább megírjuk a választ
+      // az eddigi adatokból, mint hogy mindent eldobjunk.
+      log(`    ⚠️ Az önellenőrzés nem sikerült (${e.message}) – az eddigi adatokból írom meg a választ.`, 'warn');
+      break;
+    }
     if (done) { log('  ✅ Az ügynök szerint elég adat gyűlt össze.', 'ok'); break; }
     queries = newQ;
     log(`    ➕ Új irányok: ${queries.join(' | ')}`, 'info');
@@ -1354,9 +1881,53 @@ async function runAutonomousResearch(topic, huOnly, maxRounds) {
 
   if (!factsParts.length) throw new Error('Nem gyűlt össze adat – próbáld újra.');
 
-  log('  💡 Végső válasz összeállítása...', 'info');
+  // TELJESSÉGI ELLENŐRZÉS (csak felsorolás-módban): egy független körben megkeressük
+  // a gyanús hiányokat, és csak azokra keresünk rá célzottan a válasz előtt.
+  // Az egész ellenőrző kör "ráadás": ha bármi elhasal benne, a már összegyűlt
+  // tényekkel akkor is megszületik a válasz.
+  if (enumeration && !stopResearchRequested) {
+    try {
+      log('  🕵️ Teljességi ellenőrzés: kimaradt-e ismert szereplő?', 'info');
+      const auditQs = (await auditCompleteness(topic, factsParts.join('\n\n'))).filter(q => {
+        const k = normalizeQuery(q);
+        if (seenQueries.has(k)) return false;
+        seenQueries.add(k); return true;
+      });
+      if (auditQs.length) {
+        roundsDone++;
+        log(`    🔎 Ellenőrző keresések: ${auditQs.join(' | ')}`, 'info');
+        const tasks = auditQs.map(q => browseQuery(q, huOnly, 6).catch(() => ''));
+        tasks.push(groundedRoundFacts(topic, auditQs));
+        const chunks = (await Promise.all(tasks)).filter(Boolean);
+        if (chunks.length) {
+          const facts = await condenseFacts(topic, chunks);
+          if (facts) {
+            factsParts.push(`### Teljességi ellenőrzés\n${facts}`);
+            updateLiveResearch(factsParts.join('\n\n'));
+          }
+        }
+      } else log('  ✅ A teljességi ellenőrzés nem talált kimaradt szereplőt.', 'ok');
+    } catch (e) {
+      log(`  ⚠️ A teljességi ellenőrzés kimaradt (${e.message}) – a válasz az eddigi adatokból készül.`, 'warn');
+    }
+  }
+
+  log(`  💡 Végső válasz összeállítása (${roundsDone} kör, ${seenQueries.size} keresés)...`, 'info');
   setProgress(90);
-  return await generateSimpleAnswer(topic, [factsParts.join('\n\n')]);
+  const allFacts = factsParts.join('\n\n');
+  // UTOLSÓ MENTSVÁR: ha a válaszírás nem megy (hálózat, kvóta), a sok kör munkája
+  // akkor se veszjen el – a nyers tényeket adjuk vissza, azokból tovább kérdezhetsz.
+  let summary;
+  try {
+    summary = await generateSimpleAnswer(topic, factsParts);
+  } catch (e) {
+    log(`  ⚠️ A válasz megírása nem sikerült (${e.message}) – a nyers tényeket adom vissza.`, 'warn');
+    summary = '## ⚠️ A válasz megírása megszakadt\n\n' +
+      'A kutatás lefutott, de az összefoglaló megírása közben hiba történt. ' +
+      'Az összegyűjtött nyers tények alább megmaradtak – kérdezz rá a beszélgetésben, vagy indíts új kutatást.\n\n' +
+      allFacts;
+  }
+  return { summary, rounds: roundsDone, searches: seenQueries.size };
 }
 
 async function runResearch() {
@@ -1364,10 +1935,11 @@ async function runResearch() {
   if (!topic) { log('⚠️ Adj meg egy témát!', 'warn'); return; }
   if (!geminiKey) { log('⚠️ Gemini API kulcs szükséges a kutatáshoz!', 'warn'); return; }
   const huOnly = document.getElementById('research-hu').checked;
-  const depth = document.getElementById('research-depth').value;
+  const maxRounds = parseInt(document.getElementById('research-rounds').value, 10) || 5;
 
   // Új kutatás → tiszta lap a "már látott oldalak" memóriának és a leállítás-jelzőnek
   researchSeenUrls.clear();
+  resetUsageRun();
   stopResearchRequested = false;
   hideLiveResearch();
 
@@ -1382,95 +1954,18 @@ async function runResearch() {
   }
   const btn = document.getElementById('research-btn');
   btn.disabled = true;
-  // A leállítás gomb csak az önálló mélykutatásnál értelmezhető
   const stopBtn = document.getElementById('research-stop-btn');
-  if (stopBtn) stopBtn.style.display = (!huOnly && depth === 'autonomous') ? 'inline-block' : 'none';
+  if (stopBtn) stopBtn.style.display = 'inline-block';
   document.getElementById('research-result').style.display = 'none';
   setProgress(0);
   try {
-    let summary;
+    // ── ÖNÁLLÓ MÉLYKUTATÁS: Plan → Search → Reflect → Write hurok ──
+    // Magyar piac módban (".hu" négyzet) ugyanez fut, csak a keresés a magyar
+    // oldalakra szűr, és a Gemini beépített Google-keresése adja a gerincét.
+    const auto = await runAutonomousResearch(topic, huOnly, maxRounds);
+    finishResearch(topic, auto.summary, `${auto.searches} (${auto.rounds} kör a beállított ${maxRounds}-ból)`);
+    return;
 
-    // ── MAGYAR GROUNDING (".hu" négyzet bepipálva): a Gemini beépített Google
-    //    keresését használjuk – jobb a magyar árlistáknál/PDF-eknél, mint a Tavily.
-    //    A mélység-választás ilyenkor nem számít. ──
-    if (huOnly) {
-      summary = await runGroundedResearch(topic);
-      finishResearch(topic, summary, 1);
-      return;
-    }
-
-    if (depth === 'simple') {
-      // ── EGYSZERŰ KERESÉS: egy keresés a témára + közvetlen válasz ──
-      log(`\n🔎 Egyszerű keresés: ${topic}`, 'info');
-      let data;
-      if (isChineseResearchOn()) {
-        // Kínai mód: a Gemini lefordítja a témát kínai keresőkifejezéssé,
-        // és a magyar/eredeti keresés MELLETT kínaiul is keresünk párhuzamosan.
-        log('  🇨🇳 Kínai keresőszó készítése...', 'info');
-        let cnQuery = '';
-        try {
-          cnQuery = (await callGemini(
-            `Fogalmazd meg az alábbi témát EGYSZERŰSÍTETT KÍNAI nyelvű webes keresőkifejezésként. Csak a kínai keresőkifejezést add vissza, semmi mást.\n\nTéma: ${topic}`,
-            null, { temp: 0.2, maxTokens: 100 }
-          )).trim().split('\n')[0];
-        } catch (e) { log(`    ⚠️ Kínai keresőszó kihagyva: ${e.message}`, 'warn'); }
-        if (cnQuery) log(`    🔎 ${cnQuery}`, 'info');
-        const [dMain, dCn] = await Promise.all([
-          browseQuery(topic, huOnly, 6),
-          cnQuery ? browseQuery(cnQuery, false, 4).catch(() => '') : Promise.resolve(''),
-        ]);
-        data = [dMain, dCn].filter(Boolean).join('\n\n---\n\n');
-      } else {
-        data = await browseQuery(topic, huOnly, 6);
-      }
-      if (!data) throw new Error('Nem találtam forrásokat. Ellenőrizd a Tavily kulcsot vagy az internetkapcsolatot.');
-      setProgress(60);
-      log('  💡 Válasz összeállítása...', 'info');
-      summary = await generateSimpleAnswer(topic, [data]);
-      finishResearch(topic, summary, 1);
-      return;
-    }
-
-    if (depth === 'autonomous') {
-      // ── ÖNÁLLÓ MÉLYKUTATÁS: Plan → Search → Reflect → Write hurok ──
-      const maxRounds = parseInt(document.getElementById('research-rounds').value, 10) || 5;
-      summary = await runAutonomousResearch(topic, huOnly, maxRounds);
-      finishResearch(topic, summary, maxRounds);
-      return;
-    }
-
-    // ── PIACKUTATÁS (gyors/teljes) ──
-    log(`\n🔬 Kutatás indítása: ${topic}`, 'info');
-    const allData = [];
-
-    log('  📡 1. fázis: piacfeltérképezés...', 'info');
-    const mapQueries = await planMarketMapping(topic);
-    mapQueries.forEach(q => log(`    • ${q}`, 'info'));
-    // PÁRHUZAMOS: az összes feltérképező keresés egyszerre fut
-    const mappingResults = [];
-    const mapChunks = await Promise.all(mapQueries.map(q => browseQuery(q, huOnly, 4).catch(() => '')));
-    mapChunks.forEach(r => { if (r) { mappingResults.push(r); allData.push(r); } });
-    setProgress(30);
-    if (!mappingResults.length) {
-      throw new Error('Nem sikerült forrásokat gyűjteni. Ellenőrizd a Tavily kulcsot vagy az internetkapcsolatot.');
-    }
-
-    if (depth === 'full') {
-      log('  🧩 Talált opciók kinyerése...', 'info');
-      const options = await extractOptions(topic, mappingResults);
-      log('  🔎 2. fázis: részletes adatgyűjtés...', 'info');
-      const detailQueries = await planDetailSearches(topic, options);
-      detailQueries.forEach(q => log(`    • ${q}`, 'info'));
-      // PÁRHUZAMOS: a részletes keresések is egyszerre futnak
-      const detailChunks = await Promise.all(detailQueries.map(q => browseQuery(q, huOnly, 4).catch(() => '')));
-      detailChunks.forEach(r => { if (r) allData.push(r); });
-      setProgress(75);
-    }
-
-    log('  💡 Elemzés és összefoglaló készítése...', 'info');
-    setProgress(80);
-    summary = await generateExpertAnalysis(topic, allData);
-    finishResearch(topic, summary, allData.length);
   } catch (e) {
     if (e.message !== 'QUOTA_EXCEEDED' && e.message !== 'AUTH_ERROR') log(`✗ Hiba: ${e.message}`, 'err');
   } finally {
@@ -1479,8 +1974,24 @@ async function runResearch() {
   }
 }
 
+// ÁTLÁTHATÓSÁG: kiírjuk, mely doméneket jelölte a válasz "hivatalos forrásnak",
+// hogy egy pillantással kiszúrható legyen, ha egy márkanevet utánzó oldal csúszott be.
+function logOfficialSources(summary) {
+  try {
+    const hosts = new Set();
+    const re = /\[hivatalos forrás:\s*(https?:\/\/[^\]\s]+)/gi;
+    let m;
+    while ((m = re.exec(String(summary || '')))) {
+      try { hosts.add(new URL(m[1]).hostname.replace(/^www\./, '')); } catch (e) { /* rossz URL */ }
+    }
+    if (hosts.size) log(`🏢 "Hivatalos forrásként" jelölt domének: ${[...hosts].join(', ')} – érdemes ránézni, tényleg a gyártóé-e.`, 'info');
+  } catch (e) { /* nem kritikus */ }
+}
+
 // Az eredmény megjelenítése és elmentése (közös a módokhoz)
 function finishResearch(topic, summary, count) {
+  logOfficialSources(summary);
+  log(`🧮 Gemini-fogyasztás – ez a kutatás: ${fmtUsage(usageRun)} | ma: ${fmtUsage(usageToday)} | ebben a hónapban: ${fmtUsage(usageMonth)}`, 'info');
   const now = new Date();
   const markdown = `# ${topic}\n\n**Kutatás dátuma:** ${now.toISOString().slice(0, 16).replace('T', ' ')}\n**Feldolgozott keresések:** ${count}\n\n---\n\n${summary}\n\n---\n*Generálva a Kutató ügynök által*\n`;
   lastResearch = { topic, markdown };
@@ -1507,13 +2018,36 @@ function finishResearch(topic, summary, count) {
 
 // ===== EREDMÉNY OLVASÓ ABLAK: a kutatási Markdown szépen formázva, külön ablakban =====
 
+// A [forrás: URL] / [hivatalos forrás: URL] / [dátum: ...] jelöléseket rövid,
+// kattintható jelvényekké alakítja, a csupasz URL-eket pedig a mondatvégi írásjelek
+// (pl. lezáró "]" vagy pont) bevonása NÉLKÜL linkeli.
+// RÉGI HIBA: a korábbi regex a záró "]"-et (és sokszor a mondat végi pontot is)
+// belevette a href-be, ezért a GENERÁLT LINKEK MIND ÉRVÉNYTELENEK / 404-et adtak.
+// Ezen felül a teljes nyers URL-t írta ki szövegként is, ami feleslegesen hosszú volt.
+function linkifySources(s, linkStyle) {
+  const styleAttr = linkStyle ? ` style="${linkStyle}"` : '';
+  s = s.replace(/\[(hivatalos forrás|forrás):\s*(https?:\/\/[^\]\s]+)\]/gi,
+    (m, label, url) => {
+      const host = (url.match(/^https?:\/\/([^/]+)/) || ['', ''])[1].replace(/^www\./, '');
+      const icon = /hivatalos/i.test(label) ? '🏷️' : '🔗';
+      return ` <a href="${url}" target="_blank" rel="noopener"${styleAttr} title="${url}">${icon} ${host}</a>`;
+    });
+  s = s.replace(/\[dátum:\s*([^\]]+)\]/gi, '<span style="color:#64748b;">📅 $1</span>');
+  s = s.replace(/(^|[\s(])(https?:\/\/[^\s<>()\[\]"']+)/g, (m, pre, url) => {
+    const trail = (url.match(/[.,;:!?]+$/) || [''])[0];
+    const clean = trail ? url.slice(0, -trail.length) : url;
+    if (!clean) return m;
+    return `${pre}<a href="${clean}" target="_blank" rel="noopener"${styleAttr}>${clean}</a>${trail}`;
+  });
+  return s;
+}
+
 // Sorok BELSEJÉNEK formázása: linkek, félkövér, kód
 function mdInline(t) {
   let s = escHtml(t);
   s = s.replace(/\[([^\]]*)\]\((https?:\/\/[^\s)]+)\)/g,
     (m, label, url) => `<a href="${url}" target="_blank" rel="noopener">${label || url}</a>`);
-  s = s.replace(/(^|[\s(\[])((https?:\/\/)[^\s<>)"']+)/g,
-    '$1<a href="$2" target="_blank" rel="noopener">$2</a>');
+  s = linkifySources(s);
   s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
   s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
   return s;
@@ -1608,9 +2142,8 @@ function renderChatHtml(text) {
   // Markdown linkek: [címke](url)
   s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
     '<a href="$2" target="_blank" rel="noopener" style="color:#93c5fd;word-break:break-all;">$1</a>');
-  // Csupasz URL-ek (amik még nincsenek linkben – a href="..."-t a megelőző idézőjel kizárja)
-  s = s.replace(/(^|[\s(])(https?:\/\/[^\s<)]+)/g,
-    '$1<a href="$2" target="_blank" rel="noopener" style="color:#93c5fd;word-break:break-all;">$2</a>');
+  // [forrás: URL] jelölések és csupasz URL-ek – lásd linkifySources a mdInline-nál
+  s = linkifySources(s, 'color:#93c5fd;word-break:break-all;');
   return s;
 }
 
@@ -1657,7 +2190,7 @@ async function planFollowUpQueries(topic, contextText, question) {
     'Legalább egy keresés legyen ANGOL nyelvű is, ha a kérdés műszaki adatra/tesztre vonatkozik. ' +
     'Ne ismételd az általános témát, a konkrét hiányra fókuszálj. Válaszolj CSAK a keresési kifejezésekkel, soronként egyet.';
   const prompt = `Téma: ${topic}\n\nEddig tudjuk:\n${(contextText || '').slice(0, 3000)}\n\nA felhasználó új kérdése: ${question}\n\nCélzott keresési kifejezések:`;
-  return parseQueryLines(await callGemini(prompt, system, { temp: 0.4, maxTokens: 300 })).slice(0, 3);
+  return parseQueryLines(await callGemini(prompt, system, { temp: 0.4, maxTokens: 300, model: MODEL_CHEAP })).slice(0, 3);
 }
 
 // Válasz a folytatás-kérdésre az eddigi kutatás + frissen talált tények alapján
@@ -1667,12 +2200,16 @@ async function answerFollowUp(topic, contextText, conversation, question, newFac
   const system = 'Szakértő kutató asszisztens vagy. A felhasználóval FOLYAMATOS beszélgetésben pontosítjátok a kutatást. ' +
     'Válaszolj a FÓKUSZÁLT kérdésre KONKRÉTAN, az eddigi összefoglaló és a frissen talált tények alapján. ' +
     'Ne ismételd feleslegesen a korábbi összefoglalót, a kérdésre válaszolj. Ha valamire nincs adat, írd: ' +
-    '"Erről nem találtam megbízható információt". Formátum: tömör magyar Markdown, konkrét számokkal/nevekkel.';
+    '"Erről nem találtam megbízható információt". ' +
+    GROUNDING_RULES + ' ' +
+    'Formátum: tömör magyar Markdown, konkrét számokkal/nevekkel.';
   const prompt = `Téma: ${topic}\n\nEddigi kutatás összefoglalója:\n${(contextText || '').slice(0, 4000)}\n\n` +
     (newFacts ? `Frissen talált tények (a mostani kérdéshez):\n${newFacts}\n\n` : '') +
     (history ? `Eddigi beszélgetés:\n${history}\n\n` : '') +
     `A felhasználó mostani kérdése: ${question}\n\nVálaszolj konkrétan, lényegre törően:`;
-  return await callGemini(prompt, system, { temp: 0.3, maxTokens: 2500 });
+  const answer = await callGemini(prompt, system, { temp: 0.3, maxTokens: 2500 });
+  // A folytatás-válaszokat is a friss tények + az eddigi összefoglaló ellen ellenőrizzük
+  return await verifyAnswer(topic, `${newFacts || ''}\n\n${(contextText || '').slice(0, 8000)}`, answer);
 }
 
 // A beszélgetős folytatás fő logikája
@@ -1874,10 +2411,6 @@ function setProgress(pct) {
 }
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
-
-function escHtml(s) {
-  return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
 </script>
 </body>
 </html>

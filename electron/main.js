@@ -4,8 +4,26 @@
 
 const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const path = require('path');
+const fs = require('fs');
 
 const ROOT = path.join(__dirname, '..');
+
+// ─── BEÁLLÍTÁSOK TARTÓS TÁROLÁSA ───
+// A localStorage-t a takarító programok (CCleaner, Norton) törölhetik,
+// ezért a kulcsokat egy sima JSON fájlba IS mentjük, és onnan visszatöltjük.
+function settingsFile() {
+  return path.join(app.getPath('userData'), 'beallitasok.json');
+}
+ipcMain.handle('settings-load', () => {
+  try { return JSON.parse(fs.readFileSync(settingsFile(), 'utf8')); }
+  catch (e) { return {}; }
+});
+ipcMain.handle('settings-save', (_event, obj) => {
+  try {
+    fs.writeFileSync(settingsFile(), JSON.stringify(obj || {}, null, 2), 'utf8');
+    return true;
+  } catch (e) { return false; }
+});
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -60,6 +78,127 @@ ipcMain.handle('fetch-text', async (_event, url) => {
   return await resp.text();
 });
 
+// ─── YOUTUBE ÁTIRAT (felirat) + KÖZZÉTÉTELI DÁTUM ───
+// A videó címe/kivonata önmagában használhatatlan a kutatáshoz. A felirat viszont
+// teljes értékű szöveges forrás – és a dátum kell ahhoz, hogy az árakat ne fogadjuk
+// el egy évekkel ezelőtti videóból. API kulcs nem szükséges.
+//
+// FONTOS TAPASZTALAT: a watch oldal HTML-jében található feliratsáv-URL-ek már NEM
+// működnek (a YouTube üres, 0 bájtos választ ad rájuk "proof of origin" token nélkül).
+// Ami működik (ezt használja a bevált Python youtube-transcript-api is):
+//   1) watch oldal letöltése → INNERTUBE_API_KEY kiszedése a HTML-ből
+//   2) InnerTube "player" hívás ANDROID kliensként → innen jönnek a használható sáv-URL-ek
+//   3) a sáv URL letöltése (&fmt=srv3 nélkül) → XML, amiből a <text> elemek adják a szöveget
+
+const BROWSER_HEADERS = {
+  'User-Agent':
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
+    '(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  'Accept-Language': 'hu-HU,hu;q=0.9,en;q=0.8',
+};
+
+function ytVideoId(url) {
+  const m = String(url).match(/(?:v=|youtu\.be\/|embed\/|shorts\/|live\/)([A-Za-z0-9_-]{11})/);
+  return m ? m[1] : null;
+}
+
+// JSON-ban escape-elt szövegrészlet visszafejtése (pl. \u00e1 → á)
+function jsonUnescape(raw) {
+  try { return JSON.parse('"' + raw + '"'); } catch (e) { return raw; }
+}
+
+// HTML/XML entitások visszafejtése. A felirat-XML-ben duplán kódolt részek is vannak
+// (pl. &amp;#39; → &#39; → '), ezért kétszer futtatjuk le.
+function decodeEntities(s) {
+  const once = (x) => String(x)
+    .replace(/&#(\d+);/g, (_, d) => String.fromCharCode(Number(d)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCharCode(parseInt(h, 16)))
+    .replace(/&quot;/g, '"').replace(/&apos;/g, "'")
+    .replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&');
+  return once(once(s));
+}
+
+// A feliratsávok közül a legjobb kiválasztása: magyar → angol → bármi,
+// és azonos nyelven belül az emberi felirat előnyt élvez a gépivel szemben.
+function pickCaptionTrack(tracks) {
+  const score = (t) => {
+    const lang = String(t.languageCode || '').toLowerCase();
+    const auto = t.kind === 'asr';
+    let s = lang.startsWith('hu') ? 0 : (lang.startsWith('en') ? 10 : 20);
+    if (auto) s += 5;
+    return s;
+  };
+  return tracks.slice().sort((a, b) => score(a) - score(b))[0];
+}
+
+ipcMain.handle('yt-transcript', async (_event, url, maxChars = 8000) => {
+  const id = ytVideoId(url);
+  if (!id) return null;
+
+  const meta = {
+    id,
+    url: `https://www.youtube.com/watch?v=${id}`,
+    title: '', channel: '', publishDate: '', description: '',
+    transcript: '', isAuto: false, lang: '', note: '',
+  };
+
+  // 1) A watch oldal: innen jön az InnerTube API kulcs ÉS a közzétételi dátum
+  const resp = await fetch(`https://www.youtube.com/watch?v=${id}`, { headers: BROWSER_HEADERS });
+  if (!resp.ok) throw new Error('YouTube HTTP ' + resp.status);
+  const html = await resp.text();
+  const grab = (re) => { const m = html.match(re); return m ? jsonUnescape(m[1]) : ''; };
+  meta.publishDate = grab(/"publishDate":"(\d{4}-\d{2}-\d{2})/) || grab(/"uploadDate":"(\d{4}-\d{2}-\d{2})/) ||
+    grab(/<meta itemprop="datePublished" content="(\d{4}-\d{2}-\d{2})/);
+  const apiKey = (html.match(/"INNERTUBE_API_KEY":\s*"([a-zA-Z0-9_-]+)"/) || [])[1];
+  if (!apiKey) { meta.note = 'nem-talalt-api-kulcs'; return meta; }
+
+  // 2) InnerTube player ANDROID klienssel – csak így kapunk letölthető feliratsávokat
+  const pr = await fetch(`https://www.youtube.com/youtubei/v1/player?key=${apiKey}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'User-Agent': BROWSER_HEADERS['User-Agent'] },
+    body: JSON.stringify({
+      context: { client: { clientName: 'ANDROID', clientVersion: '20.10.38' } },
+      videoId: id,
+    }),
+  });
+  if (!pr.ok) { meta.note = 'innertube-hiba-' + pr.status; return meta; }
+  const data = await pr.json();
+
+  const details = data.videoDetails || {};
+  meta.title = details.title || grab(/<meta name="title" content="([^"]*)"/);
+  meta.channel = details.author || grab(/"ownerChannelName":"((?:[^"\\]|\\.)*)"/);
+  meta.description = String(details.shortDescription || '').slice(0, 800);
+  meta.publishDate = meta.publishDate ||
+    (data.microformat && data.microformat.playerMicroformatRenderer &&
+      String(data.microformat.playerMicroformatRenderer.publishDate || '').slice(0, 10)) || '';
+
+  const tracks = (data.captions && data.captions.playerCaptionsTracklistRenderer &&
+    data.captions.playerCaptionsTracklistRenderer.captionTracks) || [];
+  if (!tracks.length) { meta.note = 'nincs-felirat'; return meta; }
+
+  const track = pickCaptionTrack(tracks);
+  meta.isAuto = track.kind === 'asr';
+  meta.lang = track.languageCode || '';
+
+  // 3) A felirat letöltése. Az &fmt=srv3 elhagyása a működő (sima XML) változatot adja.
+  const capUrl = String(track.baseUrl || '').replace('&fmt=srv3', '');
+  if (!capUrl) { meta.note = 'nincs-felirat-url'; return meta; }
+  if (capUrl.includes('&exp=xpe')) { meta.note = 'po-token-kellene'; return meta; }
+  try {
+    const r = await fetch(capUrl, { headers: BROWSER_HEADERS });
+    if (r.ok) {
+      const xml = await r.text();
+      const texts = [...xml.matchAll(/<text[^>]*>([\s\S]*?)<\/text>/g)]
+        .map((m) => decodeEntities(m[1].replace(/<[^>]+>/g, '')));
+      meta.transcript = texts.join(' ').replace(/\s+/g, ' ').trim().slice(0, maxChars);
+    } else meta.note = 'felirat-http-' + r.status;
+  } catch (e) { meta.note = 'felirat-hiba'; }
+
+  return meta;
+});
+
 // ─── KUTATÓ ÜGYNÖK: webkeresés és oldal-letöltés a háttérből ───
 const TAVILY_SEARCH_URL = 'https://api.tavily.com/search';
 const TAVILY_EXTRACT_URL = 'https://api.tavily.com/extract';
@@ -77,16 +216,20 @@ function isBlocked(url) {
 // Tavily webkeresés (Bearer). A találatok mellé a tiszta tartalmat is kéri
 // (include_raw_content), így gyakran nem kell külön oldal-letöltés.
 // Visszaad: [{title,url,snippet,content}]
-ipcMain.handle('tavily-search', async (_event, apiKey, query, maxResults = 10) => {
+ipcMain.handle('tavily-search', async (_event, apiKey, query, maxResults = 10, country = '') => {
+  const body = {
+    query,
+    search_depth: 'advanced',
+    max_results: maxResults,
+    include_raw_content: true,
+  };
+  // Ország-preferencia (pl. 'hungary'): a Tavily FELERŐSÍTI az adott ország találatait,
+  // de nem zárja ki a többit. Csak a 'general' témánál értelmezett, ami itt az alapértelmezés.
+  if (country) body.country = String(country).toLowerCase();
   const resp = await fetch(TAVILY_SEARCH_URL, {
     method: 'POST',
     headers: { 'Authorization': 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      query,
-      search_depth: 'advanced',
-      max_results: maxResults,
-      include_raw_content: true,
-    }),
+    body: JSON.stringify(body),
   });
   if (!resp.ok) {
     let detail = '';
@@ -104,6 +247,9 @@ ipcMain.handle('tavily-search', async (_event, apiKey, query, maxResults = 10) =
       url,
       snippet: it.content || it.snippet || '',
       content: it.raw_content ? String(it.raw_content) : '',
+      // Ha a Tavily ismeri a közzététel dátumát, továbbadjuk: ez dönti el,
+      // hogy egy árat/akciót elfogadhatunk-e frissként
+      published: it.published_date || '',
     });
     if (out.length >= maxResults) break;
   }
@@ -115,7 +261,7 @@ ipcMain.handle('tavily-extract', async (_event, apiKey, url, maxChars = 4000) =>
   const resp = await fetch(TAVILY_EXTRACT_URL, {
     method: 'POST',
     headers: { 'Authorization': 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ urls: url, extract_depth: 'basic', format: 'markdown' }),
+    body: JSON.stringify({ urls: url, extract_depth: 'advanced', format: 'markdown' }),
   });
   if (!resp.ok) throw new Error('Tavily Extract HTTP ' + resp.status);
   const data = await resp.json();

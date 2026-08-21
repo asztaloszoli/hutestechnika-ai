@@ -9,9 +9,16 @@ contextBridge.exposeInMainWorld('desktopApi', {
   // Egy URL nyers tartalmának letöltése CORS-korlát nélkül
   fetchText: (url) => ipcRenderer.invoke('fetch-text', url),
   // Kutató ügynök: webkeresés és oldal-letöltés a háttérből
-  tavilySearch: (apiKey, query, maxResults) => ipcRenderer.invoke('tavily-search', apiKey, query, maxResults),
+  // A country (pl. 'hungary') FELERŐSÍTI az adott ország találatait, nem zárja ki a többit
+  tavilySearch: (apiKey, query, maxResults, country) =>
+    ipcRenderer.invoke('tavily-search', apiKey, query, maxResults, country),
   tavilyExtract: (apiKey, url, maxChars) => ipcRenderer.invoke('tavily-extract', apiKey, url, maxChars),
   tfSearch: (apiKey, query, maxResults) => ipcRenderer.invoke('tf-search', apiKey, query, maxResults),
   tfFetch: (apiKey, url, maxChars) => ipcRenderer.invoke('tf-fetch', apiKey, url, maxChars),
   ddgSearch: (query, maxResults) => ipcRenderer.invoke('ddg-search', query, maxResults),
+  // YouTube videó feliratának (átiratának) és közzétételi dátumának kinyerése
+  ytTranscript: (url, maxChars) => ipcRenderer.invoke('yt-transcript', url, maxChars),
+  // Beállítások (API kulcsok) tartós mentése fájlba – a localStorage törlése ellen
+  loadSettings: () => ipcRenderer.invoke('settings-load'),
+  saveSettings: (obj) => ipcRenderer.invoke('settings-save', obj),
 });
