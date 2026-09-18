@@ -876,6 +876,49 @@ let liveMicChunks = [];
 let liveUsagePrev = null;
 let liveCamStream = null;
 let liveSetupDone = false;
+let liveSetupStage = 0, liveGoodStage = -1;
+const LIVE_KB_TOOL = {
+  functionDeclarations: [{
+    name: 'search_knowledge_base',
+    description: 'Keresés a hűtéstechnikai tudásbázisban. A felhasználó kérdése alapján releváns dokumentumokat ad vissza.',
+    parameters: {
+      type: 'object',
+      properties: { query: { type: 'string', description: 'A keresendő kérdés magyarul' } },
+      required: ['query']
+    }
+  }]
+};
+function buildLiveSetup(stage) {
+  // Fokozatosan egyszerűsített setup: ha a szerver elutasít egy mezőt (1011),
+  // a következő szinten kevesebb opcionális funkcióval próbálkozunk újra.
+  const model = stage >= 4 ? 'gemini-3.1-flash-live-preview' : LIVE_MODEL;
+  if (stage >= 3) {
+    return { setup: {
+      model: 'models/' + model,
+      responseModalities: ['AUDIO'],
+      systemInstruction: { parts: [{ text: LIVE_PROMPT }] }
+    } };
+  }
+  const s = {
+    model: 'models/' + model,
+    generationConfig: {
+      responseModalities: ['AUDIO'],
+      speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } }
+    },
+    systemInstruction: { parts: [{ text: LIVE_PROMPT }] },
+    inputAudioTranscription: {},
+    outputAudioTranscription: {},
+    tools: []
+  };
+  if (stage < 2) {
+    s.generationConfig.speechConfig.languageCode = 'hu-HU';
+    s.contextWindowCompression = { slidingWindow: {} };
+    s.sessionResumption = liveResumeHandle ? { handle: liveResumeHandle } : {};
+  }
+  if (stage === 0) s.tools.push({ googleSearch: {} });
+  s.tools.push(LIVE_KB_TOOL);
+  return { setup: s };
+}
 const LIVE_PROMPT = SYSTEM_PROMPT + '\n\n## ÉLŐ BESZÉLGETÉS\n- Te egy magyarul beszélő hűtéstechnikai szakértő vagy. Rövid, gyakorlatias, lépésről lépésre mondott válaszokat adsz.\n- Ha a tudásbázisban kell keresned, használd a `search_knowledge_base` függvényt.\n- Friss, napi információért (árak, szabvány-módosulások, gyári adatok) a Google keresést is használhatod.\n- A felhasználó képet is küldhet neked (pl. címke, kompresszor neve); ha képet kapsz, említsd meg, amit látsz.';
 
 function setLiveStatus(text, state) {
@@ -1063,34 +1106,7 @@ async function connectLive() {
   liveWs = new WebSocket(wsUrl);
   liveWs.onopen = () => {
     liveSetupDone = false;
-    const setup = {
-      setup: {
-        model: 'models/' + LIVE_MODEL,
-        generationConfig: {
-          responseModalities: ['AUDIO'],
-          speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } }, languageCode: 'hu-HU' }
-        },
-        systemInstruction: { parts: [{ text: LIVE_PROMPT }] },
-        inputAudioTranscription: {},
-        outputAudioTranscription: {},
-        contextWindowCompression: { slidingWindow: {} },
-        sessionResumption: liveResumeHandle ? { handle: liveResumeHandle } : {},
-        tools: [{
-          googleSearch: {}
-        }, {
-          functionDeclarations: [{
-            name: 'search_knowledge_base',
-            description: 'Keresés a hűtéstechnikai tudásbázisban. A felhasználó kérdése alapján releváns dokumentumokat ad vissza.',
-            parameters: {
-              type: 'object',
-              properties: { query: { type: 'string', description: 'A keresendő kérdés magyarul' } },
-              required: ['query']
-            }
-          }]
-        }]
-      }
-    };
-    liveWs.send(JSON.stringify(setup));
+    liveWs.send(JSON.stringify(buildLiveSetup(liveSetupStage)));
     liveUserText = ''; liveAiText = '';
     liveUserBubble = null; liveAiBubble = null;
   };
@@ -1100,6 +1116,7 @@ async function connectLive() {
     if (msg.usageMetadata) trackLiveUsage(msg.usageMetadata);
     if (msg.setupComplete) {
       liveSetupDone = true;
+      liveGoodStage = liveSetupStage;
       setLiveStatus('Hallak...', 'listening');
       startMicCapture().then(ok => { if (!ok) stopLive(); });
       return;
@@ -1147,15 +1164,26 @@ async function connectLive() {
   liveWs.onerror = () => { if (liveActive) showToast('Live WebSocket hiba'); };
   liveWs.onclose = (e) => {
     if (liveResumeHandleNew) liveResumeHandle = liveResumeHandleNew;
+    const setupFailed = !liveSetupDone;
     liveSetupDone = false;
     stopMicCapture();
-    if (liveActive && !liveReconnecting) {
-      setLiveStatus('Újracsatlakozás... (kód: ' + (e && e.code ? e.code : '?') + ')', 'thinking');
+    if (!liveActive || liveReconnecting) { stopLiveUI(); return; }
+    if (setupFailed) {
+      liveSetupStage++;
+      if (liveSetupStage > 4) {
+        setLiveStatus('Nem sikerült kapcsolódni', '');
+        showToast('A Live API elutasította a kapcsolatot (kód: ' + (e && e.code ? e.code : '?') + '). Ellenőrizd az API kulcsot az AI Studióban.');
+        stopLive();
+        return;
+      }
+      setLiveStatus('Újrapróbálom egyszerűbb beállítással...', 'thinking');
       liveReconnecting = true;
-      setTimeout(connectLive, 1500);
-    } else {
-      stopLiveUI();
+      setTimeout(connectLive, 400);
+      return;
     }
+    setLiveStatus('Újracsatlakozás... (kód: ' + (e && e.code ? e.code : '?') + ')', 'thinking');
+    liveReconnecting = true;
+    setTimeout(connectLive, 1500);
   };
 }
 function updateLiveAiBubble() {
@@ -1229,6 +1257,7 @@ function stopLive() {
 function toggleLive() {
   if (liveActive) { stopLive(); return; }
   if (budgetExceeded()) { showToast('A havi AI költségkeret elfogyott'); return; }
+  liveSetupStage = liveGoodStage >= 0 ? liveGoodStage : 0;
   connectLive();
 }
 function toggleLiveMute() {
