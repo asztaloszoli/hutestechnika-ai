@@ -889,7 +889,7 @@ const LIVE_KB_TOOL = {
     }
   }, {
     name: 'read_webpage',
-    description: 'Egy megadott weboldal szöveges tartalmának beolvasása (URL megnyitása). Csak az asztali alkalmazásban működik.',
+    description: 'Egy megadott weboldal szöveges tartalmának beolvasása (URL megnyitása). Nyilvánosan elérhető oldalakra működik; YouTube-ra és fizetős tartalomra nem.',
     parameters: {
       type: 'object',
       properties: { url: { type: 'string', description: 'A weboldal teljes URL-je, pl. https://...' } },
@@ -1257,6 +1257,45 @@ function htmlToPlainText(html) {
   doc.querySelectorAll('script,style,noscript,iframe,svg,nav,footer,header,form').forEach(n => n.remove());
   return (doc.body ? doc.body.textContent : '').replace(/\s+/g, ' ').trim();
 }
+// Weboldal beolvasása minden platformon:
+// - asztali app: desktopApi.fetchText (ingyenes, CORS nélküli letöltés)
+// - mobil: Gemini url_context eszköz (a Google szervere tölti le az oldalt – nincs CORS)
+async function readWebPageSmart(url) {
+  if (window.desktopApi && desktopApi.fetchText) {
+    try {
+      const raw = await desktopApi.fetchText(url);
+      const text = htmlToPlainText(raw).slice(0, 8000);
+      if (text) return { content: text, method: 'asztali letöltés' };
+    } catch(e) { /* tovább a Gemini urlContext útra */ }
+  }
+  const URLCTX_MODELS = [selectedModel, 'gemini-3.5-flash', 'gemini-2.5-flash', 'gemini-3.1-flash-lite', 'gemini-3-flash-preview']
+    .filter((m, i, a) => a.indexOf(m) === i);
+  let lastErr = 'ismeretlen hiba';
+  for (const m of URLCTX_MODELS) {
+    try {
+      const resp = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${apiKey}`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text:
+              'Olvasd be a következő weboldalt, és add vissza a lényeges tartalmát tömören, ' +
+              'hangban felolvasásra alkalmas formában (főbb adatok, tények, árak felsorolása):\n' + url }] }],
+            tools: [{ urlContext: {} }]
+          }) });
+      const data = await resp.json();
+      if (data.error) { lastErr = data.error.message || ('HTTP ' + resp.status); continue; }
+      const u = data.usageMetadata || {};
+      const inT = (u.promptTokenCount || 0) + (u.toolUsePromptTokenCount || 0);
+      const outT = (u.candidatesTokenCount || 0) + (u.thoughtsTokenCount || 0);
+      if (inT || outT) trackUsage(m, inT, outT, 'TEXT');
+      const text = (data.candidates && data.candidates[0] && data.candidates[0].content &&
+        (data.candidates[0].content.parts || []).map(p => p.text || '').join(' ').trim()) || '';
+      if (text) return { content: text.slice(0, 8000), method: 'gemini url-context (' + m + ')' };
+      lastErr = 'üres válasz';
+    } catch(e) { lastErr = e.message; }
+  }
+  throw new Error(lastErr);
+}
 async function handleLiveToolCall(tc) {
   const frs = [];
   for (const fc of tc.functionCalls) {
@@ -1270,17 +1309,16 @@ async function handleLiveToolCall(tc) {
       });
     } else if (fc.name === 'read_webpage') {
       const url = String((fc.args && fc.args.url) || '');
-      if (window.desktopApi && desktopApi.fetchText) {
+      if (!/^https?:\/\//i.test(url)) {
+        frs.push({ name: fc.name, id: fc.id, response: { error: 'Érvénytelen URL – teljes https:// cím kell.' } });
+      } else {
         showToast('🌐 Weboldal olvasása…');
         try {
-          const raw = await desktopApi.fetchText(url);
-          const text = htmlToPlainText(raw).slice(0, 8000);
-          frs.push({ name: fc.name, id: fc.id, response: { result: { url, content: text || '(nincs olvasható tartalom)' } } });
+          const { content, method } = await readWebPageSmart(url);
+          frs.push({ name: fc.name, id: fc.id, response: { result: { url, content, method } } });
         } catch(e) {
-          frs.push({ name: fc.name, id: fc.id, response: { error: 'A weboldal letöltése nem sikerült: ' + e.message } });
+          frs.push({ name: fc.name, id: fc.id, response: { error: 'Az oldal beolvasása nem sikerült: ' + e.message } });
         }
-      } else {
-        frs.push({ name: fc.name, id: fc.id, response: { error: 'A weboldal-olvasás csak az asztali alkalmazásban érhető el. Keress rá a témára a Google kereséssel.' } });
       }
     } else {
       frs.push({ name: fc.name, id: fc.id, response: { error: 'Ismeretlen függvény' } });
