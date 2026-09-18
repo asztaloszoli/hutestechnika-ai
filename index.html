@@ -958,7 +958,7 @@ function resample16k(floats, srcRate) {
   }
   return int16;
 }
-function playPCM(base64) {
+function playPCM(base64, sampleRate) {
   if (!playCtx) {
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
     playCtx = new AudioCtx();
@@ -971,7 +971,7 @@ function playPCM(base64) {
   const int16 = new Int16Array(u8.buffer, 0, n);
   const f32 = new Float32Array(n);
   for (let i = 0; i < n; i++) f32[i] = int16[i] / 32768;
-  const ab = playCtx.createBuffer(1, n, 24000);
+  const ab = playCtx.createBuffer(1, n, sampleRate || 24000);
   ab.getChannelData(0).set(f32);
   const src = playCtx.createBufferSource();
   src.buffer = ab;
@@ -1165,7 +1165,11 @@ async function connectLive() {
     if (sc.modelTurn && sc.modelTurn.parts) {
       setLiveStatus('Gemini beszél...', 'speaking');
       for (const part of sc.modelTurn.parts) {
-        if (part.inlineData && part.inlineData.data) playPCM(part.inlineData.data);
+        if (part.inlineData && part.inlineData.data) {
+          const rm = String(part.inlineData.mimeType || '').match(/rate=(\d+)/);
+          console.log('[LIVE] audio:', part.inlineData.mimeType);
+          playPCM(part.inlineData.data, rm ? parseInt(rm[1]) : 24000);
+        }
         if (part.text) liveAiText += part.text;
       }
       if (liveAiText) updateLiveAiBubble();

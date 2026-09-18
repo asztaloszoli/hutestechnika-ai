@@ -42,6 +42,20 @@ function createWindow() {
   win.setMenuBarVisibility(false);
   win.loadFile(path.join(ROOT, 'start.html'));
 
+  // Fejlesztői konzol: F12 kapcsolja, Ctrl+R újratölti az oldalt.
+  // Hibakeresés alatt automatikusan is megnyílik (külön ablakban).
+  win.webContents.on('before-input-event', (event, input) => {
+    if (input.type === 'keyDown' && input.key === 'F12') {
+      win.webContents.toggleDevTools();
+      event.preventDefault();
+    }
+    if (input.type === 'keyDown' && input.control && input.key.toLowerCase() === 'r') {
+      win.webContents.reload();
+      event.preventDefault();
+    }
+  });
+  win.webContents.openDevTools({ mode: 'detach' });
+
   // Külső http(s) linkek az alapértelmezett böngészőben nyíljanak (ne az appban)
   const linkHandler = ({ url }) => {
     if (/^https?:\/\//i.test(url)) {
