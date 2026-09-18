@@ -877,6 +877,7 @@ let liveUsagePrev = null;
 let liveCamStream = null;
 let liveSetupDone = false;
 let liveSetupStage = 0, liveGoodStage = -1;
+let liveSetupTimer = null;
 const LIVE_KB_TOOL = {
   functionDeclarations: [{
     name: 'search_knowledge_base',
@@ -1104,19 +1105,39 @@ async function connectLive() {
   setLiveStatus('Kapcsolódás...', 'thinking');
   const wsUrl = 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=' + encodeURIComponent(apiKey);
   liveWs = new WebSocket(wsUrl);
+  liveSetupTimer = setTimeout(() => {
+    if (!liveSetupDone && liveWs) {
+      console.warn('[LIVE] setup időtúllépés – a szerver nem válaszolt');
+      try { liveWs.close(); } catch(e){}
+    }
+  }, 15000);
   liveWs.onopen = () => {
     liveSetupDone = false;
-    liveWs.send(JSON.stringify(buildLiveSetup(liveSetupStage)));
+    const setup = buildLiveSetup(liveSetupStage);
+    console.log('[LIVE] ws nyitva, setup küldése (szint ' + liveSetupStage + '):', setup);
+    liveWs.send(JSON.stringify(setup));
     liveUserText = ''; liveAiText = '';
     liveUserBubble = null; liveAiBubble = null;
   };
   liveWs.onmessage = async e => {
-    const msg = JSON.parse(e.data);
+    let msg;
+    try {
+      let raw = e.data;
+      if (raw instanceof Blob) raw = await raw.text();
+      else if (raw instanceof ArrayBuffer) raw = new TextDecoder().decode(raw);
+      msg = JSON.parse(raw);
+    } catch(err) {
+      console.warn('[LIVE] nem feldolgozható üzenet érkezett:', e.data);
+      return;
+    }
+    console.log('[LIVE] <<', msg);
     if (msg.error) { showToast('Live API hiba: ' + (msg.error.message || 'ismeretlen')); return; }
     if (msg.usageMetadata) trackLiveUsage(msg.usageMetadata);
     if (msg.setupComplete) {
       liveSetupDone = true;
       liveGoodStage = liveSetupStage;
+      if (liveSetupTimer) { clearTimeout(liveSetupTimer); liveSetupTimer = null; }
+      console.log('[LIVE] setupComplete – kapcsolat kész (szint ' + liveSetupStage + ')');
       setLiveStatus('Hallak...', 'listening');
       startMicCapture().then(ok => { if (!ok) stopLive(); });
       return;
@@ -1161,8 +1182,10 @@ async function connectLive() {
       flushMicBuffer();
     }
   };
-  liveWs.onerror = () => { if (liveActive) showToast('Live WebSocket hiba'); };
+  liveWs.onerror = (ev) => { console.error('[LIVE] ws hiba:', ev); if (liveActive) showToast('Live WebSocket hiba'); };
   liveWs.onclose = (e) => {
+    console.log('[LIVE] ws zárva – kód:', e && e.code, 'ok:', e && e.reason);
+    if (liveSetupTimer) { clearTimeout(liveSetupTimer); liveSetupTimer = null; }
     if (liveResumeHandleNew) liveResumeHandle = liveResumeHandleNew;
     const setupFailed = !liveSetupDone;
     liveSetupDone = false;
