@@ -310,6 +310,7 @@ body.standalone #user-input { font-size: calc(17px * var(--pwa-scale)) !importan
 body.standalone .qbtn { font-size: calc(15px * var(--pwa-scale)) !important; padding: calc(8px * var(--pwa-scale)) calc(16px * var(--pwa-scale)) !important; min-height: calc(44px * var(--pwa-scale)) !important; }
 body.standalone #send-btn { font-size: calc(20px * var(--pwa-scale)) !important; min-height: calc(50px * var(--pwa-scale)) !important; min-width: calc(56px * var(--pwa-scale)) !important; }
 body.standalone #mic-btn { font-size: calc(22px * var(--pwa-scale)) !important; min-height: calc(50px * var(--pwa-scale)) !important; min-width: calc(50px * var(--pwa-scale)) !important; }
+body.standalone #live-btn { font-size: calc(22px * var(--pwa-scale)) !important; min-height: calc(50px * var(--pwa-scale)) !important; min-width: calc(50px * var(--pwa-scale)) !important; }
 body.standalone #header h1 { font-size: calc(18px * var(--pwa-scale)) !important; }
 body.standalone #header span { font-size: calc(24px * var(--pwa-scale)) !important; }
 body.standalone .tab-btn { font-size: calc(14px * var(--pwa-scale)) !important; min-height: calc(58px * var(--pwa-scale)) !important; }
@@ -325,6 +326,91 @@ body.standalone .src-item { font-size: calc(13px * var(--pwa-scale)) !important;
 body.standalone .typing { font-size: calc(15px * var(--pwa-scale)) !important; }
 body.standalone #kb-status-mini { font-size: calc(14px * var(--pwa-scale)) !important; }
 body.standalone .ver { font-size: calc(12px * var(--pwa-scale)) !important; }
+
+/* ===== ÉLŐ MÓD (Live API) ===== */
+#live-btn {
+  background: #1e293b;
+  color: #f472b6;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 22px;
+  cursor: pointer;
+  align-self: flex-end;
+  min-height: 50px;
+  min-width: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+#live-btn:hover { background: #334155; }
+#live-overlay {
+  display: none;
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  max-height: 100dvh;
+  overflow-y: auto;
+  background: rgba(15, 23, 42, 0.98);
+  border-top: 2px solid #0ea5e9;
+  padding: 18px 16px calc(18px + env(safe-area-inset-bottom));
+  z-index: 200;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  box-shadow: 0 -8px 24px rgba(0,0,0,0.5);
+}
+#live-overlay.open { display: flex; }
+#live-ring {
+  width: 74px; height: 74px;
+  border-radius: 50%;
+  background: #1e293b;
+  border: 3px solid #334155;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 32px;
+  transition: border-color 0.3s;
+}
+#live-ring.listening { border-color: #22c55e; animation: pulse 1.2s infinite; }
+#live-ring.speaking { border-color: #0ea5e9; animation: pulse 0.6s infinite; }
+#live-ring.thinking { border-color: #a855f7; animation: pulse 0.9s infinite; }
+#live-status { font-size: 15px; color: #94a3b8; }
+#live-btns { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.live-ctl {
+  background: #1e293b;
+  color: #e2e8f0;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  padding: 12px 18px;
+  font-size: 17px;
+  cursor: pointer;
+  min-height: 50px;
+}
+.live-ctl:hover { background: #334155; }
+.live-ctl.stop { background: #7f1d1d; border-color: #ef4444; color: #fca5a5; }
+.live-ctl.active { background: #0c2a1a; border-color: #22c55e; color: #86efac; }
+#live-cam-wrap { display: none; flex-direction: column; align-items: center; gap: 8px; }
+#live-cam-wrap.open { display: flex; }
+#live-cam { max-width: 240px; width: 100%; border-radius: 10px; border: 1px solid #334155; }
+
+/* Havi költség folyamatjelző */
+.usage-bar {
+  width: 100%;
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  height: 22px;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+#usage-fill {
+  height: 100%;
+  width: 0%;
+  background: #0ea5e9;
+  transition: width 0.4s;
+}
+#usage-fill.warn { background: #f59e0b; }
+#usage-fill.over { background: #ef4444; }
+#usage-text { font-size: 13px; color: #94a3b8; }
 </style>
 </head>
 <body>
@@ -377,6 +463,7 @@ body.standalone .ver { font-size: calc(12px * var(--pwa-scale)) !important; }
     <textarea id="user-input" placeholder="Kérdezz..." rows="1"
       onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
     <button id="mic-btn" onclick="toggleMic()" title="Hangbevitel">🎤</button>
+    <button id="live-btn" onclick="toggleLive()" title="Élő beszélgetés">🎙️</button>
     <button id="send-btn" onclick="sendMessage()">➤</button>
   </div>
 </div>
@@ -405,6 +492,18 @@ body.standalone .ver { font-size: calc(12px * var(--pwa-scale)) !important; }
   </div>
 
   <div class="settings-group">
+    <h3>Havi AI költségkeret</h3>
+    <label>Havi limit dollárban (0 = nincs limit)</label>
+    <input type="number" id="settings-budget" placeholder="10" min="0" step="1" onchange="saveBudget()" />
+    <div class="usage-bar"><div id="usage-fill"></div></div>
+    <div id="usage-text"></div>
+    <div class="settings-note">
+      Becsült érték a visszakapott tokenszámokból, eszközönként számolva. Pontos
+      költségkorlát a Google AI Studio Billing → Budgets oldalán állítható.
+    </div>
+  </div>
+
+  <div class="settings-group">
     <h3>🗄️ Supabase tudásbázis</h3>
     <label>Supabase projekt URL</label>
     <input type="text" id="settings-sb-url" placeholder="https://abcdefgh.supabase.co" />
@@ -429,6 +528,24 @@ body.standalone .ver { font-size: calc(12px * var(--pwa-scale)) !important; }
       Adatbázis: Supabase pgvector<br><br>
       Az API kulcs és beállítások csak a te eszközödön tárolódnak.
     </div>
+  </div>
+</div>
+
+<!-- ÉLŐ MÓD OVERLAY -->
+<div id="live-overlay">
+  <div id="live-ring">🎙️</div>
+  <div id="live-status">Kapcsolódás...</div>
+  <div id="live-cam-wrap">
+    <video id="live-cam" autoplay playsinline muted></video>
+    <div>
+      <button class="live-ctl" onclick="sendLivePhoto()">📸 Kép küldése</button>
+      <button class="live-ctl" onclick="stopLiveCam()">✖ Kamera bezárása</button>
+    </div>
+  </div>
+  <div id="live-btns">
+    <button class="live-ctl" id="live-mute" onclick="toggleLiveMute()">🔇 Némítás</button>
+    <button class="live-ctl" id="live-cam-btn" onclick="toggleLiveCam()">📷 Kamera</button>
+    <button class="live-ctl stop" onclick="stopLive()">⏹ Leállítás</button>
   </div>
 </div>
 
@@ -485,6 +602,9 @@ let sbUrl = localStorage.getItem('hutestech_sb_url') || '';
 let sbKey = localStorage.getItem('hutestech_sb_key') || '';
 let selectedModel = localStorage.getItem('hutestech_model') || 'gemini-3.5-flash';
 let lastSearchMethod = 'none';
+const savedBudget = localStorage.getItem('hutestech_budget');
+let monthlyBudget = savedBudget !== null ? parseFloat(savedBudget) : 10;
+if (isNaN(monthlyBudget)) monthlyBudget = 10;
 
 // ===== INIT =====
 window.onload = function() {
@@ -501,6 +621,10 @@ window.onload = function() {
   // Modellválasztó beállítása a mentett értékre
   const modelSel = document.getElementById('settings-model');
   if (modelSel) modelSel.value = selectedModel;
+
+  const budgEl = document.getElementById('settings-budget');
+  if (budgEl) budgEl.value = monthlyBudget;
+  renderUsage();
 
   // Service worker regisztráció
   if ('serviceWorker' in navigator) {
@@ -675,6 +799,457 @@ document.getElementById('sb-url-mini').addEventListener('change', function() {
   updateKbStatus();
 });
 
+// ===== KÖLTSÉGKÖVETÉS =====
+const MODEL_PRICES = {
+  'gemini-3.5-flash':       { in: 1.50, out: 9.00 },
+  'gemini-3-flash-preview': { in: 0.50, out: 3.00 },
+  'gemini-3.1-flash-lite':  { in: 0.25, out: 1.50 },
+  'gemini-2.5-flash':       { in: 0.30, out: 2.50 },
+  'gemini-3.8-live':        { in: 0.75, out: 4.50, audioIn: 3.00, audioOut: 12.00, mediaIn: 1.00 },
+  'gemini-embedding-001':   { in: 0.15, out: 0 }
+};
+let warned80 = false;
+
+function monthKey() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+}
+function getUsage() {
+  try {
+    const u = JSON.parse(localStorage.getItem('hutestech_usage') || 'null');
+    if (u && u.month === monthKey()) return u;
+  } catch(e) {}
+  return { month: monthKey(), costUsd: 0, inTokens: 0, outTokens: 0 };
+}
+function trackUsage(model, inTokens, outTokens, modality) {
+  if (!model) return;
+  inTokens = inTokens || 0; outTokens = outTokens || 0;
+  if (!inTokens && !outTokens) return;
+  const p = MODEL_PRICES[model] || { in: 0.5, out: 2.0 };
+  const u = getUsage();
+  const inRate  = modality === 'AUDIO' && p.audioIn ? p.audioIn : (modality === 'IMAGE' ? (p.mediaIn || p.in) : p.in);
+  const outRate = modality === 'AUDIO' && p.audioOut ? p.audioOut : p.out;
+  u.costUsd += (inTokens * inRate + outTokens * outRate) / 1e6;
+  u.inTokens += inTokens; u.outTokens += outTokens;
+  localStorage.setItem('hutestech_usage', JSON.stringify(u));
+  renderUsage();
+}
+function renderUsage() {
+  const u = getUsage();
+  const fill = document.getElementById('usage-fill');
+  const txt = document.getElementById('usage-text');
+  if (!fill || !txt) return;
+  const pct = monthlyBudget > 0 ? Math.min(100, (u.costUsd / monthlyBudget) * 100) : 0;
+  fill.style.width = pct + '%';
+  fill.className = '';
+  if (pct >= 100) fill.classList.add('over');
+  else if (pct >= 80) fill.classList.add('warn');
+  txt.textContent = '$' + u.costUsd.toFixed(4) + ' / ' + (monthlyBudget > 0 ? '$' + monthlyBudget.toFixed(0) : 'nincs limit') + ' • ' + u.inTokens + '↗ ' + u.outTokens + '↘ token';
+}
+function saveBudget() {
+  const v = parseFloat(document.getElementById('settings-budget').value);
+  monthlyBudget = isNaN(v) ? 0 : v;
+  localStorage.setItem('hutestech_budget', monthlyBudget);
+  warned80 = false;
+  renderUsage();
+  showToast('Költségkeret mentve: $' + monthlyBudget);
+}
+function budgetExceeded() { return monthlyBudget > 0 && getUsage().costUsd >= monthlyBudget; }
+function budgetWarning() { return monthlyBudget > 0 && getUsage().costUsd >= monthlyBudget * 0.8; }
+
+// ===== ÉLŐ MÓD (Gemini 3.8 Live API) =====
+const LIVE_MODEL = 'gemini-3.8-live';
+let liveWs = null, liveActive = false, liveMuted = false, liveReconnecting = false;
+let micStream = null, micCtx = null, micWorklet = null;
+let playCtx = null, playTime = 0, playSources = [];
+let liveResumeHandle = null, liveResumeHandleNew = null;
+let liveUserBubble = null, liveAiBubble = null, liveAiText = '', liveUserText = '';
+let liveMicChunks = [];
+let liveUsagePrev = null;
+let liveCamStream = null;
+const LIVE_PROMPT = SYSTEM_PROMPT + '\n\n## ÉLŐ BESZÉLGETÉS\n- Te egy magyarul beszélő hűtéstechnikai szakértő vagy. Rövid, gyakorlatias, lépésről lépésre mondott válaszokat adsz.\n- Ha a tudásbázisban kell keresned, használd a `search_knowledge_base` függvényt.\n- A felhasználó képet is küldhet neked (pl. címke, kompresszor neve); ha képet kapsz, említsd meg, amit látsz.';
+
+function setLiveStatus(text, state) {
+  const s = document.getElementById('live-status');
+  const r = document.getElementById('live-ring');
+  if (s) s.textContent = text;
+  if (r) { r.className = ''; if (state) r.classList.add(state); }
+}
+function b64encode(bytes) {
+  let bin = '';
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin);
+}
+function resample16k(floats, srcRate) {
+  if (srcRate === 16000) {
+    const int16 = new Int16Array(floats.length);
+    for (let i = 0; i < floats.length; i++) {
+      const s = Math.max(-1, Math.min(1, floats[i]));
+      int16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+    }
+    return int16;
+  }
+  const ratio = 16000 / srcRate;
+  const outLen = Math.floor(floats.length * ratio);
+  const out = new Float32Array(outLen);
+  for (let i = 0; i < outLen; i++) {
+    const idx = i / ratio;
+    const t = idx - Math.floor(idx);
+    const a = Math.floor(idx), b = Math.min(a + 1, floats.length - 1);
+    out[i] = floats[a] * (1 - t) + floats[b] * t;
+  }
+  const int16 = new Int16Array(outLen);
+  for (let i = 0; i < outLen; i++) {
+    const s = Math.max(-1, Math.min(1, out[i]));
+    int16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+  }
+  return int16;
+}
+function playPCM(base64) {
+  if (!playCtx) {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    playCtx = new AudioCtx();
+  }
+  if (playCtx.state === 'suspended') playCtx.resume();
+  const bin = atob(base64);
+  const n = bin.length >> 1;
+  const u8 = new Uint8Array(n * 2);
+  for (let i = 0; i < n * 2; i++) u8[i] = bin.charCodeAt(i);
+  const int16 = new Int16Array(u8.buffer, 0, n);
+  const f32 = new Float32Array(n);
+  for (let i = 0; i < n; i++) f32[i] = int16[i] / 32768;
+  const ab = playCtx.createBuffer(1, n, 24000);
+  ab.getChannelData(0).set(f32);
+  const src = playCtx.createBufferSource();
+  src.buffer = ab;
+  src.connect(playCtx.destination);
+  const t = Math.max(playCtx.currentTime, playTime);
+  src.start(t);
+  playTime = t + ab.duration;
+  playSources.push(src);
+  src.onended = () => {
+    const i = playSources.indexOf(src);
+    if (i >= 0) playSources.splice(i, 1);
+    if (playSources.length === 0 && liveActive) {
+      setLiveStatus('Hallak...', 'listening');
+    }
+  };
+}
+function stopPlayback() {
+  playSources.forEach(s => { try { s.stop(); } catch(e) {} });
+  playSources = [];
+  playTime = 0;
+}
+function int16ToBase64(arr) {
+  return b64encode(new Uint8Array(arr.buffer));
+}
+function flushMicBuffer() {
+  if (!liveActive || !liveWs || liveWs.readyState !== WebSocket.OPEN || !liveMicChunks.length) return;
+  let total = 0;
+  liveMicChunks.forEach(c => total += c.length);
+  const merged = new Int16Array(total);
+  let off = 0;
+  for (const c of liveMicChunks) { merged.set(c, off); off += c.length; }
+  liveMicChunks = [];
+  liveWs.send(JSON.stringify({
+    realtimeInput: { audio: { data: int16ToBase64(merged), mimeType: 'audio/pcm;rate=16000' } }
+  }));
+}
+function setupScriptProcessor(stream, onAudioData) {
+  try {
+    const sp = micCtx.createScriptProcessor(2048, 1, 1);
+    const an = micCtx.createMediaStreamSource(stream);
+    an.connect(sp);
+    sp.connect(micCtx.destination);
+    sp.onaudioprocess = e => onAudioData(e.inputBuffer.getChannelData(0));
+    micWorklet = sp;
+    return true;
+  } catch(e) {
+    console.warn('ScriptProcessor fallback failed:', e);
+    return false;
+  }
+}
+function startMicCapture() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    showToast('A böngésző nem támogatja a mikrofont'); return Promise.resolve(false);
+  }
+  return navigator.mediaDevices.getUserMedia({
+    audio: { channelCount: 1, sampleRate: 16000, echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+  }).then(stream => {
+    micStream = stream;
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    try { micCtx = new AudioCtx({ sampleRate: 16000 }); }
+    catch(e) { micCtx = new AudioCtx(); }
+    if (micCtx.state === 'suspended') micCtx.resume();
+    const srcRate = micCtx.sampleRate;
+    const onAudioData = (floats) => {
+      if (liveMuted) return;
+      const pcm = resample16k(floats, srcRate);
+      liveMicChunks.push(pcm);
+      if (liveMicChunks.reduce((a, c) => a + c.length, 0) >= 1600) flushMicBuffer();
+    };
+
+    if (micCtx.audioWorklet) {
+      const code = `
+        class P16Processor extends AudioWorkletProcessor {
+          process(inputs) {
+            const ch = inputs[0] && inputs[0][0];
+            if (!ch || ch.length === 0) return true;
+            this.port.postMessage(new Float32Array(ch));
+            return true;
+          }
+        }
+        registerProcessor('p16-processor', P16Processor);`;
+      const blob = new Blob([code], { type: 'application/javascript' });
+      const url = URL.createObjectURL(blob);
+      return micCtx.audioWorklet.addModule(url).then(() => {
+        micWorklet = new AudioWorkletNode(micCtx, 'p16-processor');
+        const an = micCtx.createMediaStreamSource(stream);
+        an.connect(micWorklet);
+        micWorklet.port.onmessage = e => onAudioData(e.data);
+        return true;
+      }).catch(err => {
+        console.warn('AudioWorklet hiba, átváltás ScriptProcessor-ra:', err);
+        return setupScriptProcessor(stream, onAudioData);
+      });
+    } else {
+      return setupScriptProcessor(stream, onAudioData);
+    }
+  }).catch(e => { showToast('Mikrofon hiba: ' + e.message); return false; });
+}
+function stopMicCapture() {
+  if (micWorklet) {
+    try {
+      if (micWorklet.port) micWorklet.port.onmessage = null;
+      if (micWorklet.onaudioprocess) micWorklet.onaudioprocess = null;
+      micWorklet.disconnect();
+    } catch(e){}
+    micWorklet = null;
+  }
+  if (micCtx) { try { micCtx.close(); } catch(e){} micCtx = null; }
+  if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
+}
+async function connectLive() {
+  if (!apiKey) { showToast('Add meg a Gemini API kulcsot'); return; }
+  if (budgetExceeded()) { showToast('A havi AI költségkeret elfogyott'); return; }
+  if (isRecording) {
+    manualStop = true;
+    if (recognition) try { recognition.stop(); } catch(e){}
+    isRecording = false;
+    const mb = document.getElementById('mic-btn');
+    if (mb) mb.classList.remove('recording');
+  }
+  if (!playCtx) {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    playCtx = new AudioCtx();
+  }
+  if (playCtx.state === 'suspended') playCtx.resume();
+
+  document.getElementById('live-overlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+  liveActive = true; liveReconnecting = false;
+  liveUsagePrev = null;
+  setLiveStatus('Kapcsolódás...', 'thinking');
+  const wsUrl = 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=' + encodeURIComponent(apiKey);
+  liveWs = new WebSocket(wsUrl);
+  liveWs.onopen = () => {
+    setLiveStatus('Várakozás a beszédre...', 'listening');
+    const setup = {
+      setup: {
+        model: 'models/' + LIVE_MODEL,
+        generationConfig: {
+          responseModalities: ['AUDIO'],
+          speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } }
+        },
+        systemInstruction: { parts: [{ text: LIVE_PROMPT }] },
+        inputAudioTranscription: {},
+        outputAudioTranscription: {},
+        contextWindowCompression: { slidingWindow: {} },
+        sessionResumption: { handle: liveResumeHandle || null },
+        tools: [{
+          functionDeclarations: [{
+            name: 'search_knowledge_base',
+            description: 'Keresés a hűtéstechnikai tudásbázisban. A felhasználó kérdése alapján releváns dokumentumokat ad vissza.',
+            parameters: {
+              type: 'object',
+              properties: { query: { type: 'string', description: 'A keresendő kérdés magyarul' } },
+              required: ['query']
+            }
+          }]
+        }]
+      }
+    };
+    liveWs.send(JSON.stringify(setup));
+    startMicCapture().then(ok => { if (!ok) stopLive(); });
+    liveUserText = ''; liveAiText = '';
+    liveUserBubble = null; liveAiBubble = null;
+  };
+  liveWs.onmessage = async e => {
+    const msg = JSON.parse(e.data);
+    if (msg.error) { showToast('Live API hiba: ' + (msg.error.message || 'ismeretlen')); return; }
+    if (msg.setupComplete || msg.sessionResumptionUpdate || msg.goAway) {
+      if (msg.sessionResumptionUpdate && msg.sessionResumptionUpdate.newHandle) {
+        liveResumeHandleNew = msg.sessionResumptionUpdate.newHandle;
+      }
+      if (msg.goAway) { setLiveStatus('Kapcsolat frissítése...', 'thinking'); }
+      return;
+    }
+    if (msg.usageMetadata) { trackLiveUsage(msg.usageMetadata); return; }
+    if (msg.toolCall) { await handleLiveToolCall(msg.toolCall); return; }
+    const sc = msg.serverContent;
+    if (!sc) return;
+    if (sc.interrupted) {
+      stopPlayback();
+      liveAiText = (liveAiText + ' (félbeszakítva)').trim();
+      if (liveAiBubble) liveAiBubble.textContent = '🤖 ' + liveAiText;
+      setLiveStatus('Hallak...', 'listening');
+      return;
+    }
+    if (sc.inputTranscription && sc.inputTranscription.text) {
+      liveUserText = (liveUserText + sc.inputTranscription.text);
+      if (!liveUserBubble) liveUserBubble = addMsg('🎙️ ' + liveUserText.trim(), 'user');
+      else liveUserBubble.textContent = '🎙️ ' + liveUserText.trim();
+    }
+    if (sc.modelTurn && sc.modelTurn.parts) {
+      setLiveStatus('Gemini beszél...', 'speaking');
+      for (const part of sc.modelTurn.parts) {
+        if (part.inlineData && part.inlineData.data) playPCM(part.inlineData.data);
+        if (part.text) liveAiText += part.text;
+      }
+      if (liveAiText) updateLiveAiBubble();
+    }
+    if (sc.outputTranscription && sc.outputTranscription.text) {
+      liveAiText += sc.outputTranscription.text;
+      updateLiveAiBubble();
+    }
+    if (sc.turnComplete) {
+      if (liveUserText.trim()) chatHistory.push({ role: 'user', parts: [{ text: liveUserText.trim() }] });
+      if (liveAiText.trim()) chatHistory.push({ role: 'model', parts: [{ text: liveAiText.trim() }] });
+      liveUserText = ''; liveAiText = ''; liveUserBubble = null; liveAiBubble = null;
+      if (playSources.length === 0) setLiveStatus('Hallak...', 'listening');
+      flushMicBuffer();
+    }
+  };
+  liveWs.onerror = () => { if (liveActive) showToast('Live WebSocket hiba'); };
+  liveWs.onclose = () => {
+    if (liveResumeHandleNew) liveResumeHandle = liveResumeHandleNew;
+    if (liveActive && !liveReconnecting) {
+      setLiveStatus('Újracsatlakozás...', 'thinking');
+      liveReconnecting = true;
+      setTimeout(connectLive, 1500);
+    } else {
+      stopLiveUI();
+    }
+  };
+}
+function updateLiveAiBubble() {
+  if (!liveAiBubble) liveAiBubble = addMsg('🤖 ' + liveAiText.trim(), 'ai');
+  else liveAiBubble.innerHTML = '<div class="source-badge general">🎙️ élő</div><div>' + formatAI(liveAiText.trim()) + '</div>';
+}
+function trackLiveUsage(u) {
+  const curIn = u.promptTokenCount || 0;
+  const curOut = u.candidatesTokenCount || 0;
+  const detIn = (u.promptTokensDetails || []).reduce((a, d) => { a[d.modality] = (a[d.modality] || 0) + (d.tokenCount || 0); return a; }, {});
+  const detOut = (u.responseTokensDetails || []).reduce((a, d) => { a[d.modality] = (a[d.modality] || 0) + (d.tokenCount || 0); return a; }, {});
+  const prevIn = liveUsagePrev ? liveUsagePrev.in : 0;
+  const prevOut = liveUsagePrev ? liveUsagePrev.out : 0;
+  const prevInD = liveUsagePrev ? liveUsagePrev.inD : {};
+  const prevOutD = liveUsagePrev ? liveUsagePrev.outD : {};
+
+  const inText  = Math.max(0, (detIn.TEXT  || 0) - (prevInD.TEXT  || 0));
+  const inAudio = Math.max(0, (detIn.AUDIO || 0) - (prevInD.AUDIO || 0));
+  const inImg   = Math.max(0, (detIn.IMAGE || 0) - (prevInD.IMAGE || 0));
+  const inRest  = Math.max(0, (curIn - prevIn) - inText - inAudio - inImg);
+
+  const outText  = Math.max(0, (detOut.TEXT  || 0) - (prevOutD.TEXT  || 0));
+  const outAudio = Math.max(0, (detOut.AUDIO || 0) - (prevOutD.AUDIO || 0));
+  const outRest  = Math.max(0, (curOut - prevOut) - outText - outAudio);
+
+  if (inText + inRest > 0) trackUsage(LIVE_MODEL, inText + inRest, 0, 'TEXT');
+  if (inAudio > 0) trackUsage(LIVE_MODEL, inAudio, 0, 'AUDIO');
+  if (inImg > 0) trackUsage(LIVE_MODEL, inImg, 0, 'IMAGE');
+  if (outText + outRest > 0) trackUsage(LIVE_MODEL, 0, outText + outRest, 'TEXT');
+  if (outAudio > 0) trackUsage(LIVE_MODEL, 0, outAudio, 'AUDIO');
+
+  liveUsagePrev = { in: curIn, out: curOut, inD: {...detIn}, outD: {...detOut} };
+}
+async function handleLiveToolCall(tc) {
+  const frs = [];
+  for (const fc of tc.functionCalls) {
+    if (fc.name === 'search_knowledge_base') {
+      showToast('📚 Tudásbázis-keresés…');
+      const { results, method } = await searchKnowledgeBase(fc.args.query || '');
+      frs.push({
+        name: fc.name,
+        id: fc.id,
+        response: { result: { documents: results.map(r => ({ title: r.name, content: r.content, score: r.score })), method } }
+      });
+    } else {
+      frs.push({ name: fc.name, id: fc.id, response: { error: 'Ismeretlen függvény' } });
+    }
+  }
+  if (liveWs && liveWs.readyState === WebSocket.OPEN) {
+    liveWs.send(JSON.stringify({ toolResponse: { functionResponses: frs } }));
+  }
+}
+function stopLiveUI() {
+  document.getElementById('live-overlay').classList.remove('open');
+  document.body.style.overflow = '';
+  stopMicCapture();
+  stopLiveCam();
+  stopPlayback();
+  if (playCtx) { try { playCtx.close(); } catch(e){} playCtx = null; playTime = 0; }
+  liveActive = false; liveReconnecting = false;
+  liveUserText = ''; liveAiText = ''; liveUserBubble = null; liveAiBubble = null;
+}
+function stopLive() {
+  liveActive = false;
+  liveReconnecting = false;
+  if (liveWs) { try { liveWs.close(); } catch(e){} liveWs = null; }
+  if (liveResumeHandleNew) liveResumeHandle = liveResumeHandleNew;
+  stopLiveUI();
+}
+function toggleLive() {
+  if (liveActive) { stopLive(); return; }
+  if (budgetExceeded()) { showToast('A havi AI költségkeret elfogyott'); return; }
+  connectLive();
+}
+function toggleLiveMute() {
+  liveMuted = !liveMuted;
+  const b = document.getElementById('live-mute');
+  b.textContent = liveMuted ? '🔈 Némítás feloldása' : '🔇 Némítás';
+  b.classList.toggle('active', liveMuted);
+  if (liveMuted) flushMicBuffer();
+}
+function toggleLiveCam() {
+  const wrap = document.getElementById('live-cam-wrap');
+  if (wrap.classList.contains('open')) { stopLiveCam(); return; }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { showToast('A kamera nem elérhető'); return; }
+  navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+    .then(stream => {
+      liveCamStream = stream;
+      const v = document.getElementById('live-cam');
+      v.srcObject = stream;
+      wrap.classList.add('open');
+    }).catch(e => showToast('Kamera hiba: ' + e.message));
+}
+function stopLiveCam() {
+  document.getElementById('live-cam-wrap').classList.remove('open');
+  if (liveCamStream) { liveCamStream.getTracks().forEach(t => t.stop()); liveCamStream = null; }
+}
+function sendLivePhoto() {
+  if (!liveCamStream || !liveWs || liveWs.readyState !== WebSocket.OPEN) return;
+  const v = document.getElementById('live-cam');
+  const c = document.createElement('canvas');
+  c.width = Math.min(1024, v.videoWidth || 640);
+  c.height = Math.min(1024, v.videoHeight || 480);
+  const ctx = c.getContext('2d');
+  ctx.drawImage(v, 0, 0, c.width, c.height);
+  const b64 = c.toDataURL('image/jpeg', 0.8).split(',')[1];
+  liveWs.send(JSON.stringify({ realtimeInput: { video: { data: b64, mimeType: 'image/jpeg' } } }));
+  showToast('📸 Kép elküldve');
+}
+
 // ===== SUPABASE KERESÉS =====
 async function embedQuery(text) {
   if (!apiKey) throw new Error('Nincs API kulcs');
@@ -692,6 +1267,9 @@ async function embedQuery(text) {
   );
   const data = await resp.json();
   if (data.error) throw new Error('Embedding: ' + data.error.message);
+  const u = data.usageMetadata || {};
+  const inT = u.promptTokenCount || Math.ceil(text.length / 4);
+  trackUsage('gemini-embedding-001', inT, 0, 'TEXT');
   const vec = data.embedding.values;
   let n = 0;
   for (const v of vec) n += v * v;
@@ -750,6 +1328,8 @@ async function sendMessage() {
   const text = input.value.trim();
   if (!text) return;
   if (!apiKey) { addMsg('Add meg a Gemini API kulcsot a Beállítások fülön!', 'error'); return; }
+  if (budgetExceeded()) { addMsg('A havi AI költségkeret elfogyott.', 'error'); return; }
+  if (budgetWarning() && !warned80) { warned80 = true; showToast('⚠️ A havi AI keret 80%-a elfogyott'); }
 
   input.value = '';
   input.style.height = '42px';
@@ -781,6 +1361,7 @@ async function sendMessage() {
     const MODELS = [selectedModel, ...ALL_MODELS.filter(m => m !== selectedModel)];
     const MAX_RETRIES = 2;
     let data = null;
+    let usedModel = selectedModel;
     for (let m = 0; m < MODELS.length; m++) {
       let modelDone = false;
       for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
@@ -800,7 +1381,7 @@ async function sendMessage() {
         const overloaded = resp.status === 503 ||
           (data.error && (data.error.code === 503 ||
             /overload|high demand|unavailable|try again/i.test(data.error.message || '')));
-        if (!overloaded) { modelDone = true; break; }
+        if (!overloaded) { usedModel = MODELS[m]; modelDone = true; break; }
         if (attempt < MAX_RETRIES) {
           const waitSec = (attempt + 1) * 2; // 2s, 4s
           typingDiv.textContent = `A szerver túlterhelt, újrapróbálkozás ${waitSec} mp múlva... (${MODELS[m]} – ${attempt + 1}/${MAX_RETRIES})`;
@@ -823,6 +1404,11 @@ async function sendMessage() {
       chatHistory.pop();
       return;
     }
+
+    const u = data.usageMetadata || {};
+    const inT = u.promptTokenCount || 0;
+    const outT = (u.candidatesTokenCount || 0) + (u.thoughtsTokenCount || 0);
+    if (inT || outT) trackUsage(usedModel, inT, outT, 'TEXT');
 
     const reply = data.candidates[0].content.parts[0].text;
     chatHistory.push({ role: 'model', parts: [{ text: reply }] });
@@ -901,6 +1487,7 @@ function formatAI(text) {
 }
 
 function handleKey(e) {
+  if (e.key === 'Escape' && liveActive) { stopLive(); return; }
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
 }
 
@@ -922,6 +1509,7 @@ function renderQuickBtns() {
 }
 
 function switchTab(tab) {
+  if (tab === 'settings' && liveActive) stopLive();
   document.querySelectorAll('.tab-btn').forEach((b, i) => {
     b.classList.toggle('active', (i === 0 && tab === 'chat') || (i === 1 && tab === 'settings'));
   });
@@ -932,6 +1520,8 @@ function switchTab(tab) {
     if (apiKey) document.getElementById('settings-api-key').value = '••••••••';
     document.getElementById('settings-sb-url').value = sbUrl;
     if (sbKey) document.getElementById('settings-sb-key').value = '••••••••';
+    document.getElementById('settings-budget').value = monthlyBudget;
+    renderUsage();
   }
 }
 
@@ -1015,6 +1605,7 @@ function initSpeech() {
 }
 
 function toggleMic() {
+  if (liveActive) stopLive();
   if (!recognition) {
     initSpeech();
     if (!recognition) {
@@ -1041,6 +1632,11 @@ function toggleMic() {
 
 // Speech init
 initSpeech();
+
+// Globális billentyűparancs (Escape = élő mód bezárása)
+window.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && liveActive) stopLive();
+});
 </script>
 </body>
 </html>
