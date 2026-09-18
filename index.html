@@ -889,11 +889,11 @@ const LIVE_KB_TOOL = {
     }
   }, {
     name: 'read_webpage',
-    description: 'Egy megadott weboldal szöveges tartalmának beolvasása (URL megnyitása). Nyilvánosan elérhető oldalakra működik; YouTube-ra és fizetős tartalomra nem.',
+    description: 'Egy weboldal vagy webhely tartalmának beolvasása. Megadható pontos URL (https://...) VAGY csak az oldal neve / keresőszó – ilyenkor előbb rákeresünk a helyes oldalra. Nyilvános oldalakra működik; YouTube-ra és fizetős tartalomra nem.',
     parameters: {
       type: 'object',
-      properties: { url: { type: 'string', description: 'A weboldal teljes URL-je, pl. https://...' } },
-      required: ['url']
+      properties: { target: { type: 'string', description: 'A weboldal URL-je (pl. https://met.hu) vagy a webhely neve / keresőszó (pl. "met.hu időjárás" vagy "Wikipedia R32")' } },
+      required: ['target']
     }
   }]
 };
@@ -928,7 +928,7 @@ function buildLiveSetup(stage) {
   s.tools.push(LIVE_KB_TOOL);
   return { setup: s };
 }
-const LIVE_PROMPT = 'Te egy magyarul beszélő, közvetlen hangvételű AI asszisztens vagy, aki élő hangbeszélgetésben segít a felhasználónak.\n- Bármilyen témára kíváncsi lehet a felhasználó – nem vagy egyetlen szakterülethez kötve, minden kérdésre válaszolsz.\n- Ha a kérdés hűtéstechnikai (hűtőközegek, kompresszorok, klímák, hőszivattyúk, szabványok, szervizelés), a `search_knowledge_base` függvénnyel nézz utána a szakmai tudásbázisban.\n- Ha a felhasználó konkrét weboldal tartalmára kíváncsi, a `read_webpage` függvénnyel be tudod olvasni.\n- Friss, napi információért (árak, hírek, aktuális adatok) a Google keresést használd.\n- A felhasználó képet is küldhet neked (pl. címke, dokumentum, alkatrész); ha képet kapsz, mondd el, amit látsz.\n- Rövid, természetes, kimondásra alkalmas válaszokat adj – ne sorolj fel hosszú listákat.';
+const LIVE_PROMPT = 'Te egy magyarul beszélő, közvetlen hangvételű AI asszisztens vagy, aki élő hangbeszélgetésben segít a felhasználónak.\n- Bármilyen témára kíváncsi lehet a felhasználó – nem vagy egyetlen szakterülethez kötve, minden kérdésre válaszolsz.\n- Ha a kérdés hűtéstechnikai (hűtőközegek, kompresszorok, klímák, hőszivattyúk, szabványok, szervizelés), a `search_knowledge_base` függvénnyel nézz utána a szakmai tudásbázisban.\n- Ha a felhasználó egy weboldal vagy webhely tartalmára kíváncsi, a `read_webpage` függvénnyel be tudod olvasni – elég az oldal neve is, nem kell pontos URL.\n- Friss, napi információért (árak, hírek, aktuális adatok) a Google keresést használd.\n- A felhasználó képet is küldhet neked (pl. címke, dokumentum, alkatrész); ha képet kapsz, mondd el, amit látsz.\n- Rövid, természetes, kimondásra alkalmas válaszokat adj – ne sorolj fel hosszú listákat.';
 
 function setLiveStatus(text, state) {
   const s = document.getElementById('live-status');
@@ -1260,14 +1260,28 @@ function htmlToPlainText(html) {
 // Weboldal beolvasása minden platformon:
 // - asztali app: desktopApi.fetchText (ingyenes, CORS nélküli letöltés)
 // - mobil: Gemini url_context eszköz (a Google szervere tölti le az oldalt – nincs CORS)
-async function readWebPageSmart(url) {
-  if (window.desktopApi && desktopApi.fetchText) {
+async function readWebPageSmart(target) {
+  const t = String(target || '').trim();
+  // Ha URL-szerű a bemenet, készítünk belőle teljes címet; ha csak név/keresőszó,
+  // a Gemini google_search + url_context kombinációja megtalálja és beolvassa.
+  let url = '';
+  if (/^https?:\/\//i.test(t)) url = t;
+  else if (/^[\w-]+(\.[\w-]+)+(\/\S*)?$/.test(t)) url = 'https://' + t;
+
+  if (url && window.desktopApi && desktopApi.fetchText) {
     try {
       const raw = await desktopApi.fetchText(url);
       const text = htmlToPlainText(raw).slice(0, 8000);
       if (text) return { content: text, method: 'asztali letöltés' };
-    } catch(e) { /* tovább a Gemini urlContext útra */ }
+    } catch(e) { /* tovább a Gemini útra */ }
   }
+  const prompt = url
+    ? 'Olvasd be ezt a weboldalt az url_context eszközzel, és add vissza a lényeges tartalmát ' +
+      'tömören, hangban felolvasásra alkalmasan (főbb adatok, tények, árak felsorolása):\n' + url
+    : 'A felhasználó ezt a weboldalt/webhelyet szeretné elolvasni: ' + t + '\n' +
+      'Először keresd meg a helyes oldalt a Google kereséssel, majd olvasd be az url_context ' +
+      'eszközzel. Add vissza tömören, hangban felolvasásra alkalmasan a lényeget ' +
+      '(főbb adatok, tények, árak), és jelezd, melyik URL-t olvastad be.';
   const URLCTX_MODELS = [selectedModel, 'gemini-3.5-flash', 'gemini-2.5-flash', 'gemini-3.1-flash-lite', 'gemini-3-flash-preview']
     .filter((m, i, a) => a.indexOf(m) === i);
   let lastErr = 'ismeretlen hiba';
@@ -1277,10 +1291,8 @@ async function readWebPageSmart(url) {
         `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${apiKey}`,
         { method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            contents: [{ parts: [{ text:
-              'Olvasd be a következő weboldalt, és add vissza a lényeges tartalmát tömören, ' +
-              'hangban felolvasásra alkalmas formában (főbb adatok, tények, árak felsorolása):\n' + url }] }],
-            tools: [{ urlContext: {} }]
+            contents: [{ parts: [{ text: prompt }] }],
+            tools: [{ urlContext: {} }, { googleSearch: {} }]
           }) });
       const data = await resp.json();
       if (data.error) { lastErr = data.error.message || ('HTTP ' + resp.status); continue; }
@@ -1308,14 +1320,14 @@ async function handleLiveToolCall(tc) {
         response: { result: { documents: results.map(r => ({ title: r.name, content: r.content, score: r.score })), method } }
       });
     } else if (fc.name === 'read_webpage') {
-      const url = String((fc.args && fc.args.url) || '');
-      if (!/^https?:\/\//i.test(url)) {
-        frs.push({ name: fc.name, id: fc.id, response: { error: 'Érvénytelen URL – teljes https:// cím kell.' } });
+      const target = String((fc.args && (fc.args.target || fc.args.url)) || '');
+      if (!target) {
+        frs.push({ name: fc.name, id: fc.id, response: { error: 'Nem érkezett URL vagy keresőszó.' } });
       } else {
         showToast('🌐 Weboldal olvasása…');
         try {
-          const { content, method } = await readWebPageSmart(url);
-          frs.push({ name: fc.name, id: fc.id, response: { result: { url, content, method } } });
+          const { content, method } = await readWebPageSmart(target);
+          frs.push({ name: fc.name, id: fc.id, response: { result: { target, content, method } } });
         } catch(e) {
           frs.push({ name: fc.name, id: fc.id, response: { error: 'Az oldal beolvasása nem sikerült: ' + e.message } });
         }
