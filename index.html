@@ -887,6 +887,14 @@ const LIVE_KB_TOOL = {
       properties: { query: { type: 'string', description: 'A keresendő kérdés magyarul' } },
       required: ['query']
     }
+  }, {
+    name: 'read_webpage',
+    description: 'Egy megadott weboldal szöveges tartalmának beolvasása (URL megnyitása). Csak az asztali alkalmazásban működik.',
+    parameters: {
+      type: 'object',
+      properties: { url: { type: 'string', description: 'A weboldal teljes URL-je, pl. https://...' } },
+      required: ['url']
+    }
   }]
 };
 function buildLiveSetup(stage) {
@@ -904,7 +912,7 @@ function buildLiveSetup(stage) {
     model: 'models/' + model,
     generationConfig: {
       responseModalities: ['AUDIO'],
-      speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } }
+      speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Puck' } } }
     },
     systemInstruction: { parts: [{ text: LIVE_PROMPT }] },
     inputAudioTranscription: {},
@@ -920,7 +928,7 @@ function buildLiveSetup(stage) {
   s.tools.push(LIVE_KB_TOOL);
   return { setup: s };
 }
-const LIVE_PROMPT = SYSTEM_PROMPT + '\n\n## ÉLŐ BESZÉLGETÉS\n- Te egy magyarul beszélő hűtéstechnikai szakértő vagy. Rövid, gyakorlatias, lépésről lépésre mondott válaszokat adsz.\n- Ha a tudásbázisban kell keresned, használd a `search_knowledge_base` függvényt.\n- Friss, napi információért (árak, szabvány-módosulások, gyári adatok) a Google keresést is használhatod.\n- A felhasználó képet is küldhet neked (pl. címke, kompresszor neve); ha képet kapsz, említsd meg, amit látsz.';
+const LIVE_PROMPT = 'Te egy magyarul beszélő, közvetlen hangvételű AI asszisztens vagy, aki élő hangbeszélgetésben segít a felhasználónak.\n- Bármilyen témára kíváncsi lehet a felhasználó – nem vagy egyetlen szakterülethez kötve, minden kérdésre válaszolsz.\n- Ha a kérdés hűtéstechnikai (hűtőközegek, kompresszorok, klímák, hőszivattyúk, szabványok, szervizelés), a `search_knowledge_base` függvénnyel nézz utána a szakmai tudásbázisban.\n- Ha a felhasználó konkrét weboldal tartalmára kíváncsi, a `read_webpage` függvénnyel be tudod olvasni.\n- Friss, napi információért (árak, hírek, aktuális adatok) a Google keresést használd.\n- A felhasználó képet is küldhet neked (pl. címke, dokumentum, alkatrész); ha képet kapsz, mondd el, amit látsz.\n- Rövid, természetes, kimondásra alkalmas válaszokat adj – ne sorolj fel hosszú listákat.';
 
 function setLiveStatus(text, state) {
   const s = document.getElementById('live-status');
@@ -1244,6 +1252,11 @@ function trackLiveUsage(u) {
 
   liveUsagePrev = { in: curIn, out: curOut, inD: {...detIn}, outD: {...detOut} };
 }
+function htmlToPlainText(html) {
+  const doc = new DOMParser().parseFromString(String(html), 'text/html');
+  doc.querySelectorAll('script,style,noscript,iframe,svg,nav,footer,header,form').forEach(n => n.remove());
+  return (doc.body ? doc.body.textContent : '').replace(/\s+/g, ' ').trim();
+}
 async function handleLiveToolCall(tc) {
   const frs = [];
   for (const fc of tc.functionCalls) {
@@ -1255,6 +1268,20 @@ async function handleLiveToolCall(tc) {
         id: fc.id,
         response: { result: { documents: results.map(r => ({ title: r.name, content: r.content, score: r.score })), method } }
       });
+    } else if (fc.name === 'read_webpage') {
+      const url = String((fc.args && fc.args.url) || '');
+      if (window.desktopApi && desktopApi.fetchText) {
+        showToast('🌐 Weboldal olvasása…');
+        try {
+          const raw = await desktopApi.fetchText(url);
+          const text = htmlToPlainText(raw).slice(0, 8000);
+          frs.push({ name: fc.name, id: fc.id, response: { result: { url, content: text || '(nincs olvasható tartalom)' } } });
+        } catch(e) {
+          frs.push({ name: fc.name, id: fc.id, response: { error: 'A weboldal letöltése nem sikerült: ' + e.message } });
+        }
+      } else {
+        frs.push({ name: fc.name, id: fc.id, response: { error: 'A weboldal-olvasás csak az asztali alkalmazásban érhető el. Keress rá a témára a Google kereséssel.' } });
+      }
     } else {
       frs.push({ name: fc.name, id: fc.id, response: { error: 'Ismeretlen függvény' } });
     }
