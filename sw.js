@@ -1,4 +1,4 @@
-const CACHE = 'hutestech-v9';
+const CACHE = 'hutestech-v10';
 const ASSETS = ['./index.html', './manifest.json'];
 
 self.addEventListener('install', e => {

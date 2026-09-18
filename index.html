@@ -876,7 +876,7 @@ let liveMicChunks = [];
 let liveUsagePrev = null;
 let liveCamStream = null;
 let liveSetupDone = false;
-const LIVE_PROMPT = SYSTEM_PROMPT + '\n\n## ÉLŐ BESZÉLGETÉS\n- Te egy magyarul beszélő hűtéstechnikai szakértő vagy. Rövid, gyakorlatias, lépésről lépésre mondott válaszokat adsz.\n- Ha a tudásbázisban kell keresned, használd a `search_knowledge_base` függvényt.\n- A felhasználó képet is küldhet neked (pl. címke, kompresszor neve); ha képet kapsz, említsd meg, amit látsz.';
+const LIVE_PROMPT = SYSTEM_PROMPT + '\n\n## ÉLŐ BESZÉLGETÉS\n- Te egy magyarul beszélő hűtéstechnikai szakértő vagy. Rövid, gyakorlatias, lépésről lépésre mondott válaszokat adsz.\n- Ha a tudásbázisban kell keresned, használd a `search_knowledge_base` függvényt.\n- Friss, napi információért (árak, szabvány-módosulások, gyári adatok) a Google keresést is használhatod.\n- A felhasználó képet is küldhet neked (pl. címke, kompresszor neve); ha képet kapsz, említsd meg, amit látsz.';
 
 function setLiveStatus(text, state) {
   const s = document.getElementById('live-status');
@@ -1076,6 +1076,8 @@ async function connectLive() {
         contextWindowCompression: { slidingWindow: {} },
         sessionResumption: liveResumeHandle ? { handle: liveResumeHandle } : {},
         tools: [{
+          googleSearch: {}
+        }, {
           functionDeclarations: [{
             name: 'search_knowledge_base',
             description: 'Keresés a hűtéstechnikai tudásbázisban. A felhasználó kérdése alapján releváns dokumentumokat ad vissza.',
