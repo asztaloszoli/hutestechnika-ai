@@ -326,6 +326,14 @@ body.standalone .src-item { font-size: calc(13px * var(--pwa-scale)) !important;
 body.standalone .typing { font-size: calc(15px * var(--pwa-scale)) !important; }
 body.standalone #kb-status-mini { font-size: calc(14px * var(--pwa-scale)) !important; }
 body.standalone .ver { font-size: calc(12px * var(--pwa-scale)) !important; }
+body.standalone #live-overlay { gap: calc(14px * var(--pwa-scale)); padding: calc(18px * var(--pwa-scale)) calc(16px * var(--pwa-scale)) calc(18px * var(--pwa-scale) + env(safe-area-inset-bottom)); }
+body.standalone #live-status { font-size: calc(15px * var(--pwa-scale)) !important; }
+body.standalone #live-ring { width: calc(74px * var(--pwa-scale)); height: calc(74px * var(--pwa-scale)); font-size: calc(32px * var(--pwa-scale)); }
+body.standalone .live-ctl { font-size: calc(17px * var(--pwa-scale)) !important; padding: calc(12px * var(--pwa-scale)) calc(18px * var(--pwa-scale)) !important; min-height: calc(50px * var(--pwa-scale)) !important; }
+body.standalone #live-cam { max-width: min(92vw, calc(480px * var(--pwa-scale))) !important; }
+body.standalone #live-cam-wrap { gap: calc(8px * var(--pwa-scale)); }
+body.standalone .usage-bar { height: calc(22px * var(--pwa-scale)) !important; }
+body.standalone #usage-text { font-size: calc(13px * var(--pwa-scale)) !important; }
 
 /* ===== ÉLŐ MÓD (Live API) ===== */
 #live-btn {
@@ -390,7 +398,7 @@ body.standalone .ver { font-size: calc(12px * var(--pwa-scale)) !important; }
 .live-ctl.active { background: #0c2a1a; border-color: #22c55e; color: #86efac; }
 #live-cam-wrap { display: none; flex-direction: column; align-items: center; gap: 8px; }
 #live-cam-wrap.open { display: flex; }
-#live-cam { max-width: 240px; width: 100%; border-radius: 10px; border: 1px solid #334155; }
+#live-cam { max-width: min(92vw, 480px); width: 100%; border-radius: 10px; border: 1px solid #334155; }
 
 /* Havi költség folyamatjelző */
 .usage-bar {
@@ -867,6 +875,7 @@ let liveUserBubble = null, liveAiBubble = null, liveAiText = '', liveUserText = 
 let liveMicChunks = [];
 let liveUsagePrev = null;
 let liveCamStream = null;
+let liveSetupDone = false;
 const LIVE_PROMPT = SYSTEM_PROMPT + '\n\n## ÉLŐ BESZÉLGETÉS\n- Te egy magyarul beszélő hűtéstechnikai szakértő vagy. Rövid, gyakorlatias, lépésről lépésre mondott válaszokat adsz.\n- Ha a tudásbázisban kell keresned, használd a `search_knowledge_base` függvényt.\n- A felhasználó képet is küldhet neked (pl. címke, kompresszor neve); ha képet kapsz, említsd meg, amit látsz.';
 
 function setLiveStatus(text, state) {
@@ -944,7 +953,7 @@ function int16ToBase64(arr) {
   return b64encode(new Uint8Array(arr.buffer));
 }
 function flushMicBuffer() {
-  if (!liveActive || !liveWs || liveWs.readyState !== WebSocket.OPEN || !liveMicChunks.length) return;
+  if (!liveActive || !liveSetupDone || !liveWs || liveWs.readyState !== WebSocket.OPEN || !liveMicChunks.length) return;
   let total = 0;
   liveMicChunks.forEach(c => total += c.length);
   const merged = new Int16Array(total);
@@ -1030,8 +1039,8 @@ function stopMicCapture() {
   if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
 }
 async function connectLive() {
-  if (!apiKey) { showToast('Add meg a Gemini API kulcsot'); return; }
-  if (budgetExceeded()) { showToast('A havi AI költségkeret elfogyott'); return; }
+  if (!apiKey) { showToast('Add meg a Gemini API kulcsot'); if (liveActive) stopLive(); return; }
+  if (budgetExceeded()) { showToast('A havi AI költségkeret elfogyott'); if (liveActive) stopLive(); return; }
   if (isRecording) {
     manualStop = true;
     if (recognition) try { recognition.stop(); } catch(e){}
@@ -1053,19 +1062,19 @@ async function connectLive() {
   const wsUrl = 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=' + encodeURIComponent(apiKey);
   liveWs = new WebSocket(wsUrl);
   liveWs.onopen = () => {
-    setLiveStatus('Várakozás a beszédre...', 'listening');
+    liveSetupDone = false;
     const setup = {
       setup: {
         model: 'models/' + LIVE_MODEL,
         generationConfig: {
           responseModalities: ['AUDIO'],
-          speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } }
+          speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } }, languageCode: 'hu-HU' }
         },
         systemInstruction: { parts: [{ text: LIVE_PROMPT }] },
         inputAudioTranscription: {},
         outputAudioTranscription: {},
         contextWindowCompression: { slidingWindow: {} },
-        sessionResumption: { handle: liveResumeHandle || null },
+        sessionResumption: liveResumeHandle ? { handle: liveResumeHandle } : {},
         tools: [{
           functionDeclarations: [{
             name: 'search_knowledge_base',
@@ -1080,21 +1089,24 @@ async function connectLive() {
       }
     };
     liveWs.send(JSON.stringify(setup));
-    startMicCapture().then(ok => { if (!ok) stopLive(); });
     liveUserText = ''; liveAiText = '';
     liveUserBubble = null; liveAiBubble = null;
   };
   liveWs.onmessage = async e => {
     const msg = JSON.parse(e.data);
     if (msg.error) { showToast('Live API hiba: ' + (msg.error.message || 'ismeretlen')); return; }
-    if (msg.setupComplete || msg.sessionResumptionUpdate || msg.goAway) {
-      if (msg.sessionResumptionUpdate && msg.sessionResumptionUpdate.newHandle) {
-        liveResumeHandleNew = msg.sessionResumptionUpdate.newHandle;
-      }
-      if (msg.goAway) { setLiveStatus('Kapcsolat frissítése...', 'thinking'); }
+    if (msg.usageMetadata) trackLiveUsage(msg.usageMetadata);
+    if (msg.setupComplete) {
+      liveSetupDone = true;
+      setLiveStatus('Hallak...', 'listening');
+      startMicCapture().then(ok => { if (!ok) stopLive(); });
       return;
     }
-    if (msg.usageMetadata) { trackLiveUsage(msg.usageMetadata); return; }
+    if (msg.sessionResumptionUpdate) {
+      if (msg.sessionResumptionUpdate.newHandle) liveResumeHandleNew = msg.sessionResumptionUpdate.newHandle;
+      return;
+    }
+    if (msg.goAway) { setLiveStatus('Kapcsolat frissítése...', 'thinking'); return; }
     if (msg.toolCall) { await handleLiveToolCall(msg.toolCall); return; }
     const sc = msg.serverContent;
     if (!sc) return;
@@ -1131,10 +1143,12 @@ async function connectLive() {
     }
   };
   liveWs.onerror = () => { if (liveActive) showToast('Live WebSocket hiba'); };
-  liveWs.onclose = () => {
+  liveWs.onclose = (e) => {
     if (liveResumeHandleNew) liveResumeHandle = liveResumeHandleNew;
+    liveSetupDone = false;
+    stopMicCapture();
     if (liveActive && !liveReconnecting) {
-      setLiveStatus('Újracsatlakozás...', 'thinking');
+      setLiveStatus('Újracsatlakozás... (kód: ' + (e && e.code ? e.code : '?') + ')', 'thinking');
       liveReconnecting = true;
       setTimeout(connectLive, 1500);
     } else {
@@ -1200,6 +1214,7 @@ function stopLiveUI() {
   stopPlayback();
   if (playCtx) { try { playCtx.close(); } catch(e){} playCtx = null; playTime = 0; }
   liveActive = false; liveReconnecting = false;
+  liveSetupDone = false;
   liveUserText = ''; liveAiText = ''; liveUserBubble = null; liveAiBubble = null;
 }
 function stopLive() {
