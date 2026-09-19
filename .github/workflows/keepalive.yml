@@ -1,12 +1,15 @@
 name: Supabase Keep-Alive
 
 # Megakadályozza, hogy a Supabase ingyenes projekt 7 nap inaktivitás után leálljon.
-# Minden 3. napon lefut egy egyszerű lekérdezés a healthcheck tábla felé.
+# Naponta lefut egy valódi lekérdezés a documents tábla felé.
+# FONTOS: csak ébren tartja az aktív projektet – szünetelő projektet nem tud visszaeleszteni
+# (a szünetelt projekt hosztneve DNS-ben sem létezik), azt a Supabase felületen kell
+# kézzel visszaállítani (Restore).
 
 on:
   schedule:
-    # Minden 3. napon, reggel 6:00 UTC-kor
-    - cron: "0 6 */3 * *"
+    # Naponta, reggel 6:00 UTC-kor
+    - cron: "0 6 * * *"
   workflow_dispatch:  # Kézi indítás is lehetséges a GitHub Actions fülön
 
 jobs:
@@ -29,7 +32,7 @@ jobs:
             exit 1
           fi
           HTTP_CODE=$(curl -sS -o /dev/null -w "%{http_code}" --fail-with-body \
-                "${SUPABASE_URL%/}/rest/v1/healthcheck?select=id&limit=1" \
+                "${SUPABASE_URL%/}/rest/v1/documents?select=id&limit=1" \
                   -H "apikey: ${SUPABASE_ANON_KEY}" \
                   -H "Authorization: Bearer ${SUPABASE_ANON_KEY}") || {
             echo "Hiba: a Supabase host nem érhető el vagy a kérés sikertelen."
