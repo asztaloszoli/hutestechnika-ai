@@ -2,7 +2,7 @@
 Hűtéstechnikai tudásbázis feltöltő – Supabase
 ===============================================
 Használat:
-  python upload_to_supabase.py <fájl_vagy_mappa>
+  python upload_to_supabase.py <fájl_vagy_mappa> [--topic "téma"] [--start-from N]
 
 Támogatott formátumok: .md, .txt, .pdf (ha pymupdf telepítve van)
 
@@ -24,6 +24,7 @@ import requests
 SUPABASE_URL = ""   # pl. "https://abcdefgh.supabase.co"
 SUPABASE_KEY = ""   # Publishable VAGY Service Role kulcs – Supabase → Settings → API
 GEMINI_KEY   = ""   # Google AI Studio API kulcs
+TOPIC        = "általános"  # téma címke a feltöltött dokumentumokhoz (felülírható: --topic "hűtéstechnika")
 # =====================================
 
 CHUNK_SIZE   = 400   # szavak száma egy chunk-ban
@@ -117,34 +118,44 @@ def embed(text: str) -> list[float]:
     return [v / n for v in vec] if n > 0 else vec
 
 
-def upload_chunk(title: str, content: str, embedding: list[float], source: str, chunk_idx: int):
-    resp = requests.post(
-        SUPABASE_INSERT,
-        headers={
-            "apikey": SUPABASE_KEY,
-            "Authorization": f"Bearer {SUPABASE_KEY}",
-            "Content-Type": "application/json",
-            "Prefer": "return=minimal"
-        },
-        json={
-            "title": title,
-            "content": content,
-            "embedding": embedding,
-            "source": source,
-            "chunk_idx": chunk_idx
-        },
-        timeout=30
-    )
+TOPIC_SUPPORTED = True  # az első PGRST204 hiba után False-ra vált (régi séma)
+
+
+def upload_chunk(title: str, content: str, embedding: list[float], source: str, chunk_idx: int, topic: str):
+    global TOPIC_SUPPORTED
+    headers = {
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}",
+        "Content-Type": "application/json",
+        "Prefer": "return=minimal"
+    }
+    row = {
+        "title": title,
+        "content": content,
+        "embedding": embedding,
+        "source": source,
+        "chunk_idx": chunk_idx
+    }
+    body = dict(row)
+    if TOPIC_SUPPORTED:
+        body["topic"] = topic
+    resp = requests.post(SUPABASE_INSERT, headers=headers, json=body, timeout=30)
+    if resp.status_code not in (200, 201) and TOPIC_SUPPORTED and "PGRST204" in resp.text:
+        # Régi séma: nincs topic oszlop – nélküle újra, a többi chunknál se küldjük
+        TOPIC_SUPPORTED = False
+        print("  ⚠️ Nincs 'topic' oszlop a Supabase-ben – téma címke nélkül töltök fel.")
+        print("     (A téma-funkcióhoz futtasd a frissített supabase_setup.sql-t.)")
+        resp = requests.post(SUPABASE_INSERT, headers=headers, json=row, timeout=30)
     if resp.status_code not in (200, 201):
         print(f"  HIBA feltöltésnél: {resp.status_code} – {resp.text[:200]}")
         return False
     return True
 
 
-def process_file(path: str, global_counter: list, start_from: int = 0):
+def process_file(path: str, global_counter: list, start_from: int = 0, topic: str = "általános"):
     filename = os.path.basename(path)
     title = os.path.splitext(filename)[0]
-    print(f"\n📄 Feldolgozás: {filename}")
+    print(f"\n📄 Feldolgozás: {filename} (téma: {topic})")
 
     text = read_file(path)
     if not text.strip():
@@ -164,7 +175,7 @@ def process_file(path: str, global_counter: list, start_from: int = 0):
         print(f"  chunk {chunk_num} – Embedding {i+1}/{len(chunks)}...", end=" ", flush=True)
         try:
             emb = embed(chunk)
-            ok = upload_chunk(chunk_title, chunk, emb, filename, i)
+            ok = upload_chunk(chunk_title, chunk, emb, filename, i, topic)
             print("✓" if ok else "✗")
             time.sleep(1.0)  # rate limit elkerülése
         except QuotaExceededError as e:
@@ -182,10 +193,10 @@ def main():
     check_config()
 
     if len(sys.argv) < 2:
-        print("Használat: python upload_to_supabase.py <fájl_vagy_mappa>")
+        print("Használat: python upload_to_supabase.py <fájl_vagy_mappa> [--topic \"téma\"] [--start-from N]")
         print("Példák:")
         print("  python upload_to_supabase.py dokumentumok/")
-        print("  python upload_to_supabase.py hutokozeg_tablazat.pdf")
+        print("  python upload_to_supabase.py hutokozeg_tablazat.pdf --topic \"hűtéstechnika\"")
         sys.exit(1)
 
     target = sys.argv[1]
@@ -216,10 +227,20 @@ def main():
             print("HIBA: --start-from után add meg a chunk számát (pl. --start-from 236)")
             sys.exit(1)
 
+    topic = TOPIC
+    if "--topic" in sys.argv:
+        idx = sys.argv.index("--topic")
+        try:
+            topic = sys.argv[idx + 1].strip() or TOPIC
+            print(f"🏷️  Téma címke: {topic}")
+        except IndexError:
+            print("HIBA: --topic után add meg a téma nevét (pl. --topic \"hűtéstechnika\")")
+            sys.exit(1)
+
     global_counter = [0]
     print(f"🔍 {len(files)} fájl feldolgozása...")
     for f in files:
-        process_file(f, global_counter, start_from)
+        process_file(f, global_counter, start_from, topic)
 
     print("\n✅ Kész!")
 

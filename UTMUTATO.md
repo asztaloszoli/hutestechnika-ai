@@ -268,6 +268,16 @@ python upload_to_supabase.py "C:\Users\NevED\Downloads\dokumentum.pdf"
 
 6. Ha megjelenik: **"✅ Kész!"** – a dokumentum sikeresen feltöltve.
 
+**Téma megadása (opcionális):**
+
+Ha több témájú tudásbázist építesz (pl. hűtéstechnika + más szakterület), a `--topic` kapcsolóval címkézheted a feltöltést:
+```
+python upload_to_supabase.py dokumentumok/ --topic "hűtéstechnika"
+```
+Téma nélkül minden feltöltés az `általános` címkét kapja. Az admin oldalon a "Téma" mezőbe írva ugyanez érhető el.
+
+> **Ha már korábban beállítottad a Supabase-et:** egyszer futtasd le a `supabase_migracio_topic.sql` fájlt az SQL Editorban (teljes tartalmát bemásolod → Run). Ez létrehozza a `topic` oszlopot és az új keresőfüggvényt, és a régi dokumentumok a `hűtéstechnika` címkét kapják.
+
 ---
 
 ## 6. AZ AI ASSZISZTENS HASZNÁLATA

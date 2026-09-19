@@ -517,6 +517,10 @@ body.standalone #usage-text { font-size: calc(13px * var(--pwa-scale)) !importan
     <input type="text" id="settings-sb-url" placeholder="https://abcdefgh.supabase.co" />
     <label>Supabase anon kulcs</label>
     <input type="password" id="settings-sb-key" placeholder="eyJ..." />
+    <label>Keresés köre (melyik témában keressen a tudásbázis)</label>
+    <select id="settings-topic" onchange="saveTopic()">
+      <option value="">Minden téma</option>
+    </select>
     <div class="settings-note">
       Ha még nincs Supabase projekt, az app Gemini saját tudásából válaszol (tudásbázis nélkül).<br>
       Az admin oldalon töltheted fel a dokumentumokat: <b>admin.html</b>
@@ -610,6 +614,8 @@ let sbUrl = localStorage.getItem('hutestech_sb_url') || '';
 let sbKey = localStorage.getItem('hutestech_sb_key') || '';
 let selectedModel = localStorage.getItem('hutestech_model') || 'gemini-3.5-flash';
 let lastSearchMethod = 'none';
+let kbTopics = [];                                    // a tudásbázisban lévő témák (distinct topic)
+let selectedTopic = localStorage.getItem('hutestech_topic') || ''; // '' = minden téma
 const savedBudget = localStorage.getItem('hutestech_budget');
 let monthlyBudget = savedBudget !== null ? parseFloat(savedBudget) : 10;
 if (isNaN(monthlyBudget)) monthlyBudget = 10;
@@ -779,9 +785,44 @@ async function testKnowledgeBase() {
   }
 }
 
+// A tudásbázis témáinak lekérdezése (distinct topic) – a keresés-szűrőhöz és a live promthoz
+async function fetchKbTopics() {
+  if (!sbUrl || !sbKey) { kbTopics = []; renderTopicOptions(); return; }
+  try {
+    const resp = await fetch(`${sbUrl}/rest/v1/documents?select=topic&limit=1000`, {
+      headers: { 'apikey': sbKey, 'Authorization': `Bearer ${sbKey}` }
+    });
+    const data = await resp.json();
+    if (Array.isArray(data)) {
+      kbTopics = [...new Set(data.map(d => d.topic).filter(Boolean))].sort();
+    }
+  } catch(e) { console.warn('Témalista lekérdezés sikertelen:', e); }
+  renderTopicOptions();
+}
+function renderTopicOptions() {
+  const sel = document.getElementById('settings-topic');
+  if (!sel) return;
+  const esc = s => String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+  sel.innerHTML = '<option value="">Minden téma</option>' +
+    kbTopics.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
+  sel.value = kbTopics.includes(selectedTopic) ? selectedTopic : '';
+}
+function saveTopic() {
+  selectedTopic = document.getElementById('settings-topic').value;
+  localStorage.setItem('hutestech_topic', selectedTopic);
+  showToast('Keresés köre: ' + (selectedTopic || 'minden téma'));
+}
+// A modell által adott téma érvényesítése az ismert témákra (kis/nagybetűtől független)
+function matchKnownTopic(t) {
+  if (!t) return null;
+  const found = kbTopics.find(x => x.toLowerCase() === String(t).toLowerCase());
+  return found || null;
+}
+
 function updateKbStatus() {
   const el = document.getElementById('kb-status');
   const mini = document.getElementById('kb-status-mini');
+  fetchKbTopics(); // háttérben frissíti a témalistát
   if (sbUrl && sbKey) {
     el.textContent = '🟢 KB aktív';
     el.style.color = '#86efac';
@@ -872,6 +913,7 @@ let micStream = null, micCtx = null, micWorklet = null;
 let playCtx = null, playTime = 0, playSources = [];
 let liveResumeHandle = null, liveResumeHandleNew = null;
 let liveUserBubble = null, liveAiBubble = null, liveAiText = '', liveUserText = '';
+let liveUsedKb = false;                 // az aktuális fordulóban hívta-e a tudásbázist
 let liveMicChunks = [];
 let liveUsagePrev = null;
 let liveCamStream = null;
@@ -881,10 +923,13 @@ let liveSetupTimer = null;
 const LIVE_KB_TOOL = {
   functionDeclarations: [{
     name: 'search_knowledge_base',
-    description: 'Keresés a hűtéstechnikai tudásbázisban. A felhasználó kérdése alapján releváns dokumentumokat ad vissza.',
+    description: 'Keresés a saját tudásbázisban. MINDEN tényjellegű vagy szakmai kérdésnél KÖTELEZŐ meghívni a válasz megfogalmazása ELŐTT – ilyen kérdésre fejből soha ne válaszolj. A találatok téma-címkét is tartalmaznak.',
     parameters: {
       type: 'object',
-      properties: { query: { type: 'string', description: 'A keresendő kérdés magyarul' } },
+      properties: {
+        query: { type: 'string', description: 'A keresendő kérdés magyarul' },
+        topic: { type: 'string', description: 'Opcionális: a kérdés témája, ha egyértelműen a tudásbázis egyik felsorolt témájába tartozik' }
+      },
       required: ['query']
     }
   }, {
@@ -905,7 +950,7 @@ function buildLiveSetup(stage) {
     return { setup: {
       model: 'models/' + model,
       responseModalities: ['AUDIO'],
-      systemInstruction: { parts: [{ text: LIVE_PROMPT }] }
+      systemInstruction: { parts: [{ text: liveSystemPrompt() }] }
     } };
   }
   const s = {
@@ -914,7 +959,7 @@ function buildLiveSetup(stage) {
       responseModalities: ['AUDIO'],
       speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Puck' } } }
     },
-    systemInstruction: { parts: [{ text: LIVE_PROMPT }] },
+    systemInstruction: { parts: [{ text: liveSystemPrompt() }] },
     inputAudioTranscription: {},
     outputAudioTranscription: {},
     tools: []
@@ -928,7 +973,21 @@ function buildLiveSetup(stage) {
   s.tools.push(LIVE_KB_TOOL);
   return { setup: s };
 }
-const LIVE_PROMPT = 'Te egy magyarul beszélő, közvetlen hangvételű AI asszisztens vagy, aki élő hangbeszélgetésben segít a felhasználónak.\n- Bármilyen témára kíváncsi lehet a felhasználó – nem vagy egyetlen szakterülethez kötve, minden kérdésre válaszolsz.\n- Ha a kérdés hűtéstechnikai (hűtőközegek, kompresszorok, klímák, hőszivattyúk, szabványok, szervizelés), a `search_knowledge_base` függvénnyel nézz utána a szakmai tudásbázisban.\n- Ha a felhasználó egy weboldal vagy webhely tartalmára kíváncsi, a `read_webpage` függvénnyel be tudod olvasni – elég az oldal neve is, nem kell pontos URL.\n- Friss, napi információért (árak, hírek, aktuális adatok) a Google keresést használd.\n- A felhasználó képet is küldhet neked (pl. címke, dokumentum, alkatrész); ha képet kapsz, mondd el, amit látsz.\n- Rövid, természetes, kimondásra alkalmas válaszokat adj – ne sorolj fel hosszú listákat.';
+const LIVE_PROMPT = 'Te egy magyarul beszélő, közvetlen hangvételű AI asszisztens vagy, aki élő hangbeszélgetésben segít egy szakembernek.\n' +
+'- Bármilyen témára kíváncsi lehet a felhasználó – nem vagy egyetlen szakterülethez kötve, minden kérdésre válaszolsz.\n' +
+'- MINDEN tényjellegű vagy szakmai kérdésnél (bármely téma, amire a tudásbázis anyagot tartalmazhat) a válasz előtt KÖTELEZŐ meghívnod a `search_knowledge_base` függvényt – ilyen kérdésre fejből soha ne válaszolj.\n' +
+'- A tudásbázis találataiból KONKRÉT választ adj: pontos értékek, adatok, lépések sorrendben (pl. nyomásértékhez a hőmérsékletet is mondd meg) – ne általánosságokban.\n' +
+'- Ha a tudásbázis nem ad találatot, mondd röviden: "erre nincs adat a tudásbázisban", aztán válaszolj a saját tudásodból.\n' +
+'- Csevegéshez nem kell keresés. Friss, napi információért (árak, hírek, aktuális adatok) a Google keresést használd. Weboldal tartalmára kíváncsi felhasználónál a `read_webpage` függvényt hívd.\n' +
+'- A felhasználó képet is küldhet neked (pl. címke, dokumentum, alkatrész); ha képet kapsz, mondd el, amit látsz.\n' +
+'- Szakemberrel beszélsz: ne magyarázd az alapokat, és ne háríts "bízd szakemberre" jellegű kitételekkel. Csak valóban biztonságkritikus dolgoknál (pl. ammónia, gyúlékony hűtőközeg, nyomás alatt álló rendszer) tegyél egy rövid biztonsági megjegyzést.\n' +
+'- Rövid, természetes, kimondásra alkalmas válaszokat adj – ne sorolj fel hosszú listákat.';
+// A promptba kerülő aktuális témalista (a connectLive frissíti a kbTopics tömböt)
+function liveSystemPrompt() {
+  if (!kbTopics.length) return LIVE_PROMPT;
+  return LIVE_PROMPT + '\n- A tudásbázis jelenlegi témái: ' + kbTopics.join(', ') +
+    '. A találatokat téma szerint kezeld, ne keverd össze őket; a `search_knowledge_base` hívásnál a topic paraméterrel szűkíthetsz egy témára.';
+}
 
 function setLiveStatus(text, state) {
   const s = document.getElementById('live-status');
@@ -1111,6 +1170,8 @@ async function connectLive() {
   liveActive = true; liveReconnecting = false;
   liveUsagePrev = null;
   setLiveStatus('Kapcsolódás...', 'thinking');
+  // Friss témalista a tudásbázisból (a live promptba kerül)
+  await fetchKbTopics();
   const wsUrl = 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=' + encodeURIComponent(apiKey);
   liveWs = new WebSocket(wsUrl);
   liveSetupTimer = setTimeout(() => {
@@ -1190,6 +1251,7 @@ async function connectLive() {
       if (liveUserText.trim()) chatHistory.push({ role: 'user', parts: [{ text: liveUserText.trim() }] });
       if (liveAiText.trim()) chatHistory.push({ role: 'model', parts: [{ text: liveAiText.trim() }] });
       liveUserText = ''; liveAiText = ''; liveUserBubble = null; liveAiBubble = null;
+      liveUsedKb = false;
       if (playSources.length === 0) setLiveStatus('Hallak...', 'listening');
       flushMicBuffer();
     }
@@ -1222,8 +1284,11 @@ async function connectLive() {
   };
 }
 function updateLiveAiBubble() {
+  const badge = liveUsedKb
+    ? '<div class="source-badge kb">📚 tudásbázis</div>'
+    : '<div class="source-badge general">🎙️ élő</div>';
   if (!liveAiBubble) liveAiBubble = addMsg('🤖 ' + liveAiText.trim(), 'ai');
-  else liveAiBubble.innerHTML = '<div class="source-badge general">🎙️ élő</div><div>' + formatAI(liveAiText.trim()) + '</div>';
+  else liveAiBubble.innerHTML = badge + '<div>' + formatAI(liveAiText.trim()) + '</div>';
 }
 function trackLiveUsage(u) {
   const curIn = u.promptTokenCount || 0;
@@ -1313,11 +1378,12 @@ async function handleLiveToolCall(tc) {
   for (const fc of tc.functionCalls) {
     if (fc.name === 'search_knowledge_base') {
       showToast('📚 Tudásbázis-keresés…');
-      const { results, method } = await searchKnowledgeBase(fc.args.query || '');
+      const { results, method } = await searchKnowledgeBase(fc.args.query || '', matchKnownTopic(fc.args && fc.args.topic));
+      liveUsedKb = results.length > 0;
       frs.push({
         name: fc.name,
         id: fc.id,
-        response: { result: { documents: results.map(r => ({ title: r.name, content: r.content, score: r.score })), method } }
+        response: { result: { documents: results.map(r => ({ title: r.name, content: r.content, score: r.score, topic: r.topic })), method } }
       });
     } else if (fc.name === 'read_webpage') {
       const target = String((fc.args && (fc.args.target || fc.args.url)) || '');
@@ -1397,7 +1463,15 @@ function sendLivePhoto() {
   ctx.drawImage(v, 0, 0, c.width, c.height);
   const b64 = c.toDataURL('image/jpeg', 0.8).split(',')[1];
   liveWs.send(JSON.stringify({ realtimeInput: { video: { data: b64, mimeType: 'image/jpeg' } } }));
-  showToast('📸 Kép elküldve');
+  // Visszajelzés a chatben: a kép thumbnailje egy user-buborékban
+  const b = addMsg('📸 Kép küldve', 'user');
+  const img = document.createElement('img');
+  img.src = 'data:image/jpeg;base64,' + b64;
+  img.alt = 'Elküldött kép';
+  img.style.cssText = 'max-width:200px;border-radius:8px;margin-top:6px;display:block;';
+  b.appendChild(img);
+  // Kamera automatikus bezárása – vissza az élő beszélgetéshez
+  stopLiveCam();
 }
 
 // ===== SUPABASE KERESÉS =====
@@ -1427,26 +1501,33 @@ async function embedQuery(text) {
   return n > 0 ? vec.map(v => v / n) : vec;
 }
 
-async function searchKnowledgeBase(query) {
+async function searchKnowledgeBase(query, topicOverride) {
   if (!sbUrl || !sbKey) return { results: [], method: 'none' };
+  // Téma-szűrés: az élő eszközhívás adhatja meg explicit, különben a beállított keresési kör
+  const topic = topicOverride || selectedTopic || null;
+
+  const sbHeaders = { 'apikey': sbKey, 'Authorization': `Bearer ${sbKey}`, 'Content-Type': 'application/json' };
 
   // Szemantikus keresés (ha van API kulcs)
   if (apiKey) {
     try {
       const embedding = await embedQuery(query);
-      const resp = await fetch(`${sbUrl}/rest/v1/rpc/match_documents`, {
-        method: 'POST',
-        headers: {
-          'apikey': sbKey,
-          'Authorization': `Bearer ${sbKey}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ query_embedding: embedding, match_threshold: 0.52, match_count: 4 })
+      const body = { query_embedding: embedding, match_threshold: 0.52, match_count: 4, match_topic: topic };
+      let resp = await fetch(`${sbUrl}/rest/v1/rpc/match_documents`, {
+        method: 'POST', headers: sbHeaders, body: JSON.stringify(body)
       });
-      const data = await resp.json();
+      let data = await resp.json();
+      if (!Array.isArray(data)) {
+        // Régi séma: a függvény még nem ismeri a match_topic paramétert – nélküle újra
+        delete body.match_topic;
+        resp = await fetch(`${sbUrl}/rest/v1/rpc/match_documents`, {
+          method: 'POST', headers: sbHeaders, body: JSON.stringify(body)
+        });
+        data = await resp.json();
+      }
       if (Array.isArray(data) && data.length > 0) {
         return {
-          results: data.map(r => ({ name: r.title, content: r.content, score: Math.round((r.similarity || 0) * 100) })),
+          results: data.map(r => ({ name: r.title, content: r.content, score: Math.round((r.similarity || 0) * 100), topic: r.topic || '' })),
           method: 'semantic'
         };
       }
@@ -1455,15 +1536,21 @@ async function searchKnowledgeBase(query) {
 
   // Kulcsszavas fallback
   try {
-    const q = encodeURIComponent(query.split(' ').slice(0, 3).join(' & '));
-    const resp = await fetch(
-      `${sbUrl}/rest/v1/documents?select=title,content&or=(content.ilike.*${encodeURIComponent(query.split(' ')[0])}*,title.ilike.*${encodeURIComponent(query.split(' ')[0])}*)&limit=4`,
-      { headers: { 'apikey': sbKey, 'Authorization': `Bearer ${sbKey}` } }
+    const q = `or=(content.ilike.*${encodeURIComponent(query.split(' ')[0])}*,title.ilike.*${encodeURIComponent(query.split(' ')[0])}*)&limit=4`;
+    const topicFilter = topic ? `&topic=eq.${encodeURIComponent(topic)}` : '';
+    let resp = await fetch(
+      `${sbUrl}/rest/v1/documents?select=title,content,topic&${q}${topicFilter}`,
+      { headers: sbHeaders }
     );
-    const data = await resp.json();
+    let data = await resp.json();
+    if (!Array.isArray(data)) {
+      // Régi séma: topic oszlop nélkül újra
+      resp = await fetch(`${sbUrl}/rest/v1/documents?select=title,content&${q}`, { headers: sbHeaders });
+      data = await resp.json();
+    }
     if (Array.isArray(data) && data.length > 0) {
       return {
-        results: data.map(r => ({ name: r.title, content: r.content, score: 0 })),
+        results: data.map(r => ({ name: r.title, content: r.content, score: 0, topic: r.topic || '' })),
         method: 'keyword'
       };
     }
@@ -1596,7 +1683,7 @@ async function sendMessage() {
       results.forEach((s, i) => {
         const chip = document.createElement('span');
         chip.className = 'src-item';
-        chip.textContent = `[${i+1}] ${s.name}` + (s.score ? ` (${s.score}%)` : '');
+        chip.textContent = `[${i+1}] ${s.topic ? s.topic + ' – ' : ''}${s.name}` + (s.score ? ` (${s.score}%)` : '');
         const snippet = document.createElement('div');
         snippet.className = 'src-snippet';
         snippet.textContent = (s.content || '').slice(0, 1200) + ((s.content || '').length > 1200 ? '\n...' : '');
@@ -1671,6 +1758,7 @@ function switchTab(tab) {
     document.getElementById('settings-sb-url').value = sbUrl;
     if (sbKey) document.getElementById('settings-sb-key').value = '••••••••';
     document.getElementById('settings-budget').value = monthlyBudget;
+    fetchKbTopics();
     renderUsage();
   }
 }

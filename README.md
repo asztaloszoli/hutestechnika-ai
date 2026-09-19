@@ -32,6 +32,12 @@ Tudásbázis nélkül a Gemini saját tudásából válaszol.
 1. Töltsd ki az `upload_to_supabase.py` tetején a beállításokat:
    - `SUPABASE_URL`, `SUPABASE_KEY` (service_role kulcs!), `GEMINI_KEY`
 2. Futtasd: `python upload_to_supabase.py <mappa_vagy_fájl>`
+   - Téma-címkével: `python upload_to_supabase.py <mappa> --topic "hűtéstechnika"`
+   - Téma nélkül minden feltöltés az `általános` címkét kapja; az admin oldalon is beállítható a téma.
+
+> **Meglévő Supabase projektnél** egyszer futtasd le a `supabase_migracio_topic.sql`-t
+> az SQL Editorban (bemásolod a teljes tartalmát → Run). Ez létrehozza a `topic` oszlopot,
+> az új `match_documents` függvényt, és a régi soroknak `hűtéstechnika` címkét ad.
 
 ### 4. Telepítés telefonra (PWA)
 - Az app-ot HTTPS-en kell hosztolni (GitHub Pages vagy Netlify – mindkettő ingyenes)

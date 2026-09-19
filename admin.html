@@ -200,6 +200,13 @@ textarea { resize: vertical; min-height: 120px; font-family: inherit; font-size:
   <div class="card">
     <h2>📤 Dokumentum feltöltés</h2>
 
+    <!-- Téma: minden feltöltés (fájl, kézi, OCR, URL, kutatás) ezt a címkét kapja -->
+    <div style="margin-bottom:12px;">
+      <label>Téma (a tudásbázis kategóriája – hogy a témák ne keveredjenek)</label>
+      <input type="text" id="kb-topic" list="topic-list" placeholder="pl. hűtéstechnika" value="hűtéstechnika" />
+      <datalist id="topic-list"></datalist>
+    </div>
+
     <!-- Drop zone -->
     <div id="drop-zone" onclick="document.getElementById('file-input').click()">
       <div class="dz-icon">📁</div>
@@ -344,8 +351,8 @@ textarea { resize: vertical; min-height: 120px; font-family: inherit; font-size:
       <summary id="doc-summary">Lista megjelenítése / elrejtése</summary>
       <div class="doc-scroll">
         <table id="doc-table">
-          <thead><tr><th>Cím</th><th>Forrás</th><th>Chunk</th><th></th></tr></thead>
-          <tbody id="doc-tbody"><tr><td colspan="4" style="color:#475569;text-align:center;padding:20px;">Kattints a Frissítés gombra</td></tr></tbody>
+          <thead><tr><th>Cím</th><th>Téma</th><th>Forrás</th><th>Chunk</th><th></th></tr></thead>
+          <tbody id="doc-tbody"><tr><td colspan="5" style="color:#475569;text-align:center;padding:20px;">Kattints a Frissítés gombra</td></tr></tbody>
         </table>
       </div>
     </details>
@@ -519,18 +526,44 @@ async function embedText(text) {
 }
 
 // ===== SUPABASE FELTÖLTÉS =====
-async function insertChunk(title, content, embedding, source, chunkIdx) {
-  const resp = await fetch(`${sbUrl}/rest/v1/documents`, {
-    method: 'POST',
-    headers: {
-      'apikey': sbKey,
-      'Authorization': `Bearer ${sbKey}`,
-      'Content-Type': 'application/json',
-      'Prefer': 'return=minimal'
-    },
-    body: JSON.stringify({ title, content, embedding, source, chunk_idx: chunkIdx })
-  });
-  if (!resp.ok) throw new Error(`${resp.status}: ${await resp.text()}`);
+let topicColumnOk = null; // null = még nem tudjuk; az első insert dönti el (régi sémánál false)
+
+function currentTopic() {
+  const el = document.getElementById('kb-topic');
+  const t = el ? el.value.trim() : '';
+  return t || 'általános';
+}
+
+async function insertChunk(title, content, embedding, source, chunkIdx, topic) {
+  const headers = {
+    'apikey': sbKey,
+    'Authorization': `Bearer ${sbKey}`,
+    'Content-Type': 'application/json',
+    'Prefer': 'return=minimal'
+  };
+  const row = { title, content, embedding, source, chunk_idx: chunkIdx };
+  const post = body => fetch(`${sbUrl}/rest/v1/documents`, { method: 'POST', headers, body: JSON.stringify(body) });
+
+  // Ha már tudjuk, hogy nincs topic oszlop (régi séma), egyből nélküle küldjük
+  if (topicColumnOk === false) {
+    const resp = await post(row);
+    if (!resp.ok) throw new Error(`${resp.status}: ${await resp.text()}`);
+    return;
+  }
+  let resp = await post({ ...row, topic: topic || 'általános' });
+  if (!resp.ok) {
+    const errText = await resp.text();
+    if (/PGRST204|'topic' column/i.test(errText)) {
+      // Régi séma: nincs topic oszlop – nélküle újra, a többi chunknál se adjuk hozzá
+      topicColumnOk = false;
+      log('  ⚠️ Nincs "topic" oszlop a Supabase-ben – a téma címke nem mentődik. A téma-funkcióhoz futtasd a frissített supabase_setup.sql-t.', 'warn');
+      resp = await post(row);
+      if (!resp.ok) throw new Error(`${resp.status}: ${await resp.text()}`);
+      return;
+    }
+    throw new Error(`${resp.status}: ${errText}`);
+  }
+  topicColumnOk = true;
 }
 
 // Hibaüzenetek osztályozása, hogy érthető magyar üzenetet adjunk
@@ -571,8 +604,9 @@ async function embedWithRetry(text, chunkLabel) {
 }
 
 async function processAndUpload(title, content, source) {
+  const topic = currentTopic();
   const chunks = chunkText(content);
-  log(`  📦 ${chunks.length} chunk → embedding + feltöltés...`, 'info');
+  log(`  📦 ${chunks.length} chunk → embedding + feltöltés (téma: ${topic})...`, 'info');
   if (chunks.length > 90) {
     log(`  ⚠️ Ez ${chunks.length} chunk – az ingyenes napi keret (~100 kérés) hamar elfogyhat. Ami ma nem fér bele, holnap folytatható.`, 'warn');
   }
@@ -580,7 +614,7 @@ async function processAndUpload(title, content, source) {
     const chunkTitle = chunks.length > 1 ? `${title} [${i+1}/${chunks.length}]` : title;
     try {
       const emb = await embedWithRetry(chunks[i], `chunk ${i+1}`);
-      await insertChunk(chunkTitle, chunks[i], emb, source, i);
+      await insertChunk(chunkTitle, chunks[i], emb, source, i, topic);
       log(`  ✓ chunk ${i+1}/${chunks.length}`, 'ok');
       setProgress(((i + 1) / chunks.length) * 100);
       await sleep(1000);
@@ -2345,26 +2379,42 @@ async function uploadOcrResult() {
 async function loadDocs() {
   if (!sbUrl || !sbKey) { log('⚠️ Supabase beállítások hiányoznak', 'warn'); return; }
   try {
-    const resp = await fetch(
-      `${sbUrl}/rest/v1/documents?select=id,title,source,chunk_idx&order=created_at.desc&limit=200`,
-      { headers: { 'apikey': sbKey, 'Authorization': `Bearer ${sbKey}` } }
+    const sbHeaders = { 'apikey': sbKey, 'Authorization': `Bearer ${sbKey}` };
+    let resp = await fetch(
+      `${sbUrl}/rest/v1/documents?select=id,title,source,topic,chunk_idx&order=created_at.desc&limit=200`,
+      { headers: sbHeaders }
     );
-    const docs = await resp.json();
+    let docs = await resp.json();
+    if (!Array.isArray(docs)) {
+      // Régi séma: topic oszlop nélkül újra
+      resp = await fetch(
+        `${sbUrl}/rest/v1/documents?select=id,title,source,chunk_idx&order=created_at.desc&limit=200`,
+        { headers: sbHeaders }
+      );
+      docs = await resp.json();
+    }
     const tbody = document.getElementById('doc-tbody');
     const summary = document.getElementById('doc-summary');
     const details = document.getElementById('doc-details');
     if (!Array.isArray(docs) || docs.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="4" style="color:#475569;text-align:center;padding:20px;">Nincs dokumentum</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="5" style="color:#475569;text-align:center;padding:20px;">Nincs dokumentum</td></tr>';
       if (summary) summary.textContent = 'Nincs feltöltött dokumentum';
       return;
     }
     tbody.innerHTML = docs.map(d => `
       <tr>
         <td class="doc-title">${escHtml(d.title)}</td>
+        <td class="doc-source">${escHtml(d.topic || 'általános')}</td>
         <td class="doc-source">${escHtml(d.source || '—')}</td>
         <td style="color:#64748b">${d.chunk_idx ?? 0}</td>
         <td><span class="doc-del" onclick="deleteDoc(${d.id})" title="Törlés">🗑️</span></td>
       </tr>`).join('');
+    // Téma datalist frissítése a meglévő témákkal
+    const topicList = document.getElementById('topic-list');
+    if (topicList) {
+      const topics = [...new Set(docs.map(d => d.topic).filter(Boolean))].sort();
+      topicList.innerHTML = topics.map(t => `<option value="${escHtml(t)}">`).join('');
+    }
     if (summary) summary.textContent = `Lista (${docs.length} elem) – kattints a meg-/elrejtéshez`;
     if (details) details.open = true;
     log(`✓ ${docs.length} dokumentum betöltve`, 'ok');
