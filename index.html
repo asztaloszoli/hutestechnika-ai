@@ -583,9 +583,9 @@ body.standalone #usage-text { font-size: calc(13px * var(--pwa-scale)) !importan
 
 <script>
 // ===== RENDSZER PROMPT =====
-const SYSTEM_PROMPT = `Te egy tapasztalt ipari és lakossági hűtéstechnikai szakértő vagy. Segítesz hűtéstechnikusoknak a mindennapi munkájukban.
+const SYSTEM_PROMPT = `Te egy magyarul beszélő, közvetlen hangvételű AI asszisztens vagy, aki szakembernek segít. Bármilyen témára válaszolsz – a hűtéstechnika az egyik erős szakterületed, de nem vagy hozzá kötve.
 
-## TÉMAKÖREID
+## SZAKTERÜLETED (ha a kérdés erről szól)
 - Hűtőközegek: R32, R410A, R134a, R290 (propán), R404A, R407C, R744 (CO₂), R717 (ammónia), R600a (izobután)
 - Kompresszorok: hermetikus, félhermetikus, scroll, schraeder, dugattyús, csigás
 - Hőcserélők: kondenzátorok, párologtatók, lemezcsereberék, léghűtők
@@ -597,13 +597,23 @@ const SYSTEM_PROMPT = `Te egy tapasztalt ipari és lakossági hűtéstechnikai s
 - Szabályozástechnika: termosztátok, expanziós szelepek (TXV, EEV), presosztátok
 - Jogszabályok: F-gáz rendelet (EU 517/2014), MSZ EN 378, biztonságtechnika, kezelői jogosultság
 
+A hűtéstechnikán kívüli kérdésekre is normálisan, körbejárva válaszolj – ne tereld vissza a beszélgetést a hűtéstechnikára.
+
 ## VÁLASZADÁSI SZABÁLYOK
 - Mindig MAGYARUL válaszolj
 - Legyél tömör, gyakorlatias, lépésekre bontott
 - Ha nyomásértéket mondasz, add meg a hőmérsékletet is (p-T összefüggés)
 - Ha forrást idézel a tudásbázisból, jelezd: [forrás neve]
 - Ha nem biztos az info, jelezd: "⚠️ Ezt ellenőrizd le, mert..."
-- Biztonsági figyelmeztetéseket MINDIG add meg ha releváns`;
+- Biztonsági figyelmeztetéseket csak akkor adj, ha valóban releváns
+- Szakemberrel beszélsz, ne magyarázd az alapokat, ne háríts "bízd szakemberre" kitételekkel
+- Ha a felhasználó weboldalt vagy friss/napi információt kér (hírek, árak, időjárás, egy oldal tartalma), használd a Google keresést / URL-olvasást és a talált tartalom alapján válaszolj; jelezd, melyik oldalt olvastad`;
+
+function chatSystemPrompt() {
+  if (!kbTopics.length) return SYSTEM_PROMPT;
+  return SYSTEM_PROMPT + '\n\n## A tudásbázis jelenlegi témái\n' + kbTopics.join(', ') +
+    ' – a tudásbázis találatait téma szerint kezeld, ne keverd.';
+}
 
 // ===== GYORSGOMBOK =====
 const QUICK_BTNS = [
@@ -1628,12 +1638,12 @@ async function sendMessage() {
     typingDiv.textContent = 'Gondolkodik...';
 
     // System prompt összeállítás
-    let fullPrompt = SYSTEM_PROMPT;
+    let fullPrompt = chatSystemPrompt();
     if (results.length > 0) {
       const ctx = results.map((r, i) => `### [${i+1}] ${r.name}\n${r.content}`).join('\n\n---\n\n');
       fullPrompt += '\n\n## Tudásbázis – releváns dokumentumok\n' + ctx;
     } else if (sbUrl && sbKey) {
-      fullPrompt += '\n\n(A tudásbázisban nem találtam pontos egyezést. Általános szakmai tudásból válaszolj, de jelezd: "⚠️ A tudásbázisban nincs erre konkrét dokumentum.")';
+      fullPrompt += '\n\n(A tudásbázisban nincs erre találat. Ha szakmai kérdés, válaszolj a saját tudásodból és egy rövid mondatban jelezd, hogy a tudásbázisban nincs róla dokumentum. Általános, hétköznapi vagy webes kérdésnél a tudásbázist ne is említsd.)';
     }
 
     // Gemini API hívás – a választott modell az elsődleges, a többi tartalék túlterheltség (503) esetén
@@ -1642,33 +1652,47 @@ async function sendMessage() {
     const MAX_RETRIES = 2;
     let data = null;
     let usedModel = selectedModel;
+    async function callModel(model, withTools) {
+      const resp = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            system_instruction: { parts: [{ text: fullPrompt }] },
+            contents: chatHistory,
+            ...(withTools ? { tools: [{ googleSearch: {} }, { urlContext: {} }] } : {})
+          })
+        }
+      );
+      return { resp, data: await resp.json() };
+    }
     for (let m = 0; m < MODELS.length; m++) {
       let modelDone = false;
       for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-        const resp = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${MODELS[m]}:generateContent?key=${apiKey}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              system_instruction: { parts: [{ text: fullPrompt }] },
-              contents: chatHistory
-            })
-          }
-        );
-        data = await resp.json();
+        let r = await callModel(MODELS[m], true);
+        data = r.data;
+        // Ha a modell nem támogatja a Google keresés / URL-olvasás eszközt, egyszer eszközök nélkül újrapróbáljuk
+        const toolError = data.error && /tool|url_context|urlContext|google_search|googleSearch/i.test(data.error.message || '');
+        const overloaded0 = r.resp.status === 503 ||
+          (data.error && (data.error.code === 503 ||
+            /overload|high demand|unavailable|try again/i.test(data.error.message || '')));
+        if (toolError && !overloaded0) {
+          r = await callModel(MODELS[m], false);
+          data = r.data;
+        }
         // Túlterheltség (503) vagy átmeneti hiba esetén várunk / modellt váltunk
-        const overloaded = resp.status === 503 ||
+        const overloaded = r.resp.status === 503 ||
           (data.error && (data.error.code === 503 ||
             /overload|high demand|unavailable|try again/i.test(data.error.message || '')));
         if (!overloaded) { usedModel = MODELS[m]; modelDone = true; break; }
         if (attempt < MAX_RETRIES) {
           const waitSec = (attempt + 1) * 2; // 2s, 4s
-          typingDiv.textContent = `A szerver túlterhelt, újrapróbálkozás ${waitSec} mp múlva... (${MODELS[m]} – ${attempt + 1}/${MAX_RETRIES})`;
-          await new Promise(r => setTimeout(r, waitSec * 1000));
+          typingDiv.textContent = `Túlterhelt szerver, újra ${waitSec} mp múlva… (${attempt + 1}/${MAX_RETRIES})`;
+          await new Promise(r2 => setTimeout(r2, waitSec * 1000));
         } else if (m < MODELS.length - 1) {
-          typingDiv.textContent = `Tartalék modellre váltás: ${MODELS[m + 1]}...`;
-          await new Promise(r => setTimeout(r, 600));
+          typingDiv.textContent = `Másik modellre váltás: ${MODELS[m + 1]}…`;
+          await new Promise(r2 => setTimeout(r2, 600));
         }
       }
       if (modelDone) break;
@@ -1686,15 +1710,28 @@ async function sendMessage() {
     }
 
     const u = data.usageMetadata || {};
-    const inT = u.promptTokenCount || 0;
+    const inT = (u.promptTokenCount || 0) + (u.toolUsePromptTokenCount || 0);
     const outT = (u.candidatesTokenCount || 0) + (u.thoughtsTokenCount || 0);
     if (inT || outT) trackUsage(usedModel, inT, outT, 'TEXT');
 
-    const reply = data.candidates[0].content.parts[0].text;
+    const cand = data.candidates && data.candidates[0];
+    const parts = (cand && cand.content && cand.content.parts) || [];
+    const reply = parts.filter(p => p.text && !p.thought).map(p => p.text).join('') || '(üres válasz)';
     chatHistory.push({ role: 'model', parts: [{ text: reply }] });
 
     typingDiv.classList.remove('typing');
     typingDiv.innerHTML = '';
+
+    // Webes források összegyűjtése (grounding + URL-olvasás), URL szerint deduplikálva
+    const webSources = [];
+    const seenUrls = new Set();
+    const addWebSource = (uri, title) => {
+      if (uri && !seenUrls.has(uri)) { seenUrls.add(uri); webSources.push({ uri, title }); }
+    };
+    ((cand && cand.groundingMetadata && cand.groundingMetadata.groundingChunks) || [])
+      .forEach(ch => { if (ch.web && ch.web.uri) addWebSource(ch.web.uri, ch.web.title); });
+    ((cand && cand.urlContextMetadata && cand.urlContextMetadata.urlMetadata) || [])
+      .forEach(m => addWebSource(m.retrievedUrl));
 
     // Badge
     const badge = document.createElement('div');
@@ -1705,6 +1742,9 @@ async function sendMessage() {
       const strong = method === 'semantic' ? maxScore >= 65 : true;
       badge.className = 'source-badge ' + (strong ? 'kb' : 'general');
       badge.textContent = `📚 ${icon} tudásbázis – ${label} (${results.length} forrás)`;
+    } else if (webSources.length) {
+      badge.className = 'source-badge general';
+      badge.textContent = '🌐 web – Google keresés / URL';
     } else if (sbUrl && sbKey) {
       badge.className = 'source-badge general';
       badge.textContent = '⚠️ Nincs KB találat – általános AI tudás';
@@ -1735,6 +1775,23 @@ async function sendMessage() {
         srcDiv.appendChild(snippet);
       });
       typingDiv.appendChild(srcDiv);
+    }
+
+    // Webes források (Google keresés / URL-olvasás)
+    if (webSources.length) {
+      const webDiv = document.createElement('div');
+      webDiv.className = 'sources';
+      webDiv.innerHTML = '🌐 Webes források:<br>';
+      webSources.slice(0, 5).forEach(w => {
+        const a = document.createElement('a');
+        a.className = 'src-item';
+        a.href = w.uri;
+        a.target = '_blank';
+        a.rel = 'noopener';
+        a.textContent = w.title || (() => { try { return new URL(w.uri).hostname; } catch(e) { return w.uri; } })();
+        webDiv.appendChild(a);
+      });
+      typingDiv.appendChild(webDiv);
     }
     typingDiv.scrollIntoView({ behavior: 'smooth' });
 
