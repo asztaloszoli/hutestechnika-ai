@@ -465,7 +465,7 @@ body.standalone #usage-text { font-size: calc(13px * var(--pwa-scale)) !importan
 <!-- CHAT NÉZET -->
 <div id="chat-view" style="display:flex;flex-direction:column;flex:1;overflow:hidden;">
   <div id="chat-container">
-    <div class="msg system">Üdvözöllek! Kérdezz hűtéstechnikával kapcsolatban. 🔧</div>
+    <div class="msg system">Üdvözöllek! Kérdezz bármiről – a tudásbázis témáiban forrásokkal válaszolok. 🔧</div>
   </div>
   <div id="quick-btns"></div>
   <div id="input-area">
@@ -1673,7 +1673,9 @@ async function sendMessage() {
         let r = await callModel(MODELS[m], true);
         data = r.data;
         // Ha a modell nem támogatja a Google keresés / URL-olvasás eszközt, egyszer eszközök nélkül újrapróbáljuk
-        const toolError = data.error && /tool|url_context|urlContext|google_search|googleSearch/i.test(data.error.message || '');
+        // Kvótahiba (429) is ide tartozik: ingyenes kulccsal a Google keresés / URL-olvasás nem elérhető
+        const toolError = data.error && (r.resp.status === 429 || data.error.code === 429 ||
+          /quota|RESOURCE_EXHAUSTED|tool|url_context|urlContext|google_search|googleSearch/i.test(data.error.message || ''));
         const overloaded0 = r.resp.status === 503 ||
           (data.error && (data.error.code === 503 ||
             /overload|high demand|unavailable|try again/i.test(data.error.message || '')));
@@ -1703,6 +1705,8 @@ async function sendMessage() {
       let msg = data.error.message;
       if (/overload|high demand|unavailable/i.test(msg || '')) {
         msg = 'A Gemini szerverek jelenleg túlterheltek (minden modell). Próbáld újra pár perc múlva.';
+      } else if (/quota|RESOURCE_EXHAUSTED/i.test(msg || '')) {
+        msg = 'A Gemini API kulcs kvótája elfogyott (429). Ingyenes kulcsnál napi/perces limit van, és a Google keresés / weboldal-olvasás csak számlázással aktivált (fizetős) kulccsal működik. Ellenőrizd: aistudio.google.com → Settings → Plan / Billing.';
       }
       addMsg('API hiba: ' + msg, 'error');
       chatHistory.pop();
