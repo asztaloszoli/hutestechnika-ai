@@ -1436,6 +1436,8 @@ async function handleLiveToolCall(tc) {
           const { content, method } = await readWebPageSmart(target);
           frs.push({ name: fc.name, id: fc.id, response: { result: { target, content, method } } });
         } catch(e) {
+          console.error('[LIVE] read_webpage hiba:', target, e);
+          addMsg('🌐 Weboldal-olvasás nem sikerült (' + target + '): ' + e.message, 'error');
           frs.push({ name: fc.name, id: fc.id, response: { error: 'Az oldal beolvasása nem sikerült: ' + e.message } });
         }
       }
