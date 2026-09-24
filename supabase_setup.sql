@@ -72,3 +72,11 @@ create policy "Publikus olvasás"
   using (true);
 
 -- Megjegyzés: írás (insert/delete) csak szerveren keresztül, nem anon kulcsal
+
+-- Data API hozzáférés (jogosultságok)
+-- 2026. október 30-tól a Supabase az új táblákat NEM teszi automatikusan elérhetővé a Data API-n
+-- (supabase-js / REST) keresztül – ezért explicit grant kell. Meglévő táblán is biztonságosan futtatható.
+grant usage on schema public to anon, authenticated, service_role;
+grant select, insert, update, delete on public.documents to anon, authenticated, service_role;
+grant usage, select on sequence public.documents_id_seq to anon, authenticated, service_role;
+grant execute on function public.match_documents(vector, float, int, text) to anon, authenticated, service_role;

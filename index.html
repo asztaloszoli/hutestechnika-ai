@@ -497,6 +497,13 @@ body.standalone #usage-text { font-size: calc(13px * var(--pwa-scale)) !importan
       <option value="gemini-2.5-flash">gemini-2.5-flash (régebbi, megbízható)</option>
     </select>
     <div class="settings-note">Ha a választott modell túlterhelt, az app automatikusan a többivel is próbálkozik.</div>
+    <label>Élő mód gondolkodás</label>
+    <select id="settings-live-thinking" onchange="saveLiveThinking()">
+      <option value="LOW">alacsony (leggyorsabb)</option>
+      <option value="MEDIUM">közepes</option>
+      <option value="HIGH">magas (lassabb, okosabb)</option>
+    </select>
+    <div class="settings-note">A következő élő kapcsolatnál lép életbe.</div>
   </div>
 
   <div class="settings-group">
@@ -536,7 +543,7 @@ body.standalone #usage-text { font-size: calc(13px * var(--pwa-scale)) !importan
     <div class="settings-note" style="font-size:11px;line-height:1.7;">
       <b>Hűtéstechnikai AI Súgó</b> — PWA alkalmazás<br>
       Ipari és lakossági hűtéstechnikusoknak<br><br>
-      Modell: a Beállításokban választható (alapért. gemini-3.5-flash), gemini-embedding-001 (keresés)<br>
+      Modell: a Beállításokban választható (alapért. gemini-3.5-flash), gemini-embedding-001 (keresés), élő mód: gemini-3.8-live-extended-thinking<br>
       Adatbázis: Supabase pgvector<br><br>
       Az API kulcs és beállítások csak a te eszközödön tárolódnak.
     </div>
@@ -613,6 +620,7 @@ let apiKey = localStorage.getItem('hutestech_gemini_key') || '';
 let sbUrl = localStorage.getItem('hutestech_sb_url') || '';
 let sbKey = localStorage.getItem('hutestech_sb_key') || '';
 let selectedModel = localStorage.getItem('hutestech_model') || 'gemini-3.5-flash';
+let liveThinkingLevel = localStorage.getItem('hutestech_live_thinking') || 'LOW';
 let lastSearchMethod = 'none';
 let kbTopics = [];                                    // a tudásbázisban lévő témák (distinct topic)
 let selectedTopic = localStorage.getItem('hutestech_topic') || ''; // '' = minden téma
@@ -635,6 +643,8 @@ window.onload = function() {
   // Modellválasztó beállítása a mentett értékre
   const modelSel = document.getElementById('settings-model');
   if (modelSel) modelSel.value = selectedModel;
+  const thinkSel = document.getElementById('settings-live-thinking');
+  if (thinkSel) thinkSel.value = liveThinkingLevel;
 
   const budgEl = document.getElementById('settings-budget');
   if (budgEl) budgEl.value = monthlyBudget;
@@ -650,6 +660,12 @@ function saveModel() {
   selectedModel = document.getElementById('settings-model').value;
   localStorage.setItem('hutestech_model', selectedModel);
   showToast('Modell beállítva: ' + selectedModel);
+}
+
+function saveLiveThinking() {
+  liveThinkingLevel = document.getElementById('settings-live-thinking').value;
+  localStorage.setItem('hutestech_live_thinking', liveThinkingLevel);
+  showToast('Élő mód gondolkodás mentve: ' + liveThinkingLevel);
 }
 
 function saveApiKey() {
@@ -855,6 +871,7 @@ const MODEL_PRICES = {
   'gemini-3.1-flash-lite':  { in: 0.25, out: 1.50 },
   'gemini-2.5-flash':       { in: 0.30, out: 2.50 },
   'gemini-3.8-live':        { in: 0.75, out: 4.50, audioIn: 3.00, audioOut: 12.00, mediaIn: 1.00 },
+  'gemini-3.8-live-extended-thinking': { in: 0.75, out: 4.50, audioIn: 3.00, audioOut: 12.00, mediaIn: 1.00 },
   'gemini-embedding-001':   { in: 0.15, out: 0 }
 };
 let warned80 = false;
@@ -906,8 +923,8 @@ function saveBudget() {
 function budgetExceeded() { return monthlyBudget > 0 && getUsage().costUsd >= monthlyBudget; }
 function budgetWarning() { return monthlyBudget > 0 && getUsage().costUsd >= monthlyBudget * 0.8; }
 
-// ===== ÉLŐ MÓD (Gemini 3.8 Live API) =====
-const LIVE_MODEL = 'gemini-3.8-live';
+// ===== ÉLŐ MÓD (Gemini 3.8 Live API, Extended Thinking) =====
+const LIVE_MODEL = 'gemini-3.8-live-extended-thinking';
 let liveWs = null, liveActive = false, liveMuted = false, liveReconnecting = false;
 let micStream = null, micCtx = null, micWorklet = null;
 let playCtx = null, playTime = 0, playSources = [];
@@ -923,6 +940,7 @@ let liveSetupTimer = null;
 const LIVE_KB_TOOL = {
   functionDeclarations: [{
     name: 'search_knowledge_base',
+    behavior: 'NON_BLOCKING',
     description: 'Keresés a saját tudásbázisban. MINDEN tényjellegű vagy szakmai kérdésnél KÖTELEZŐ meghívni a válasz megfogalmazása ELŐTT – ilyen kérdésre fejből soha ne válaszolj. A találatok téma-címkét is tartalmaznak.',
     parameters: {
       type: 'object',
@@ -934,6 +952,7 @@ const LIVE_KB_TOOL = {
     }
   }, {
     name: 'read_webpage',
+    behavior: 'NON_BLOCKING',
     description: 'Egy weboldal vagy webhely tartalmának beolvasása. Megadható pontos URL (https://...) VAGY csak az oldal neve / keresőszó – ilyenkor előbb rákeresünk a helyes oldalra. Nyilvános oldalakra működik; YouTube-ra és fizetős tartalomra nem.',
     parameters: {
       type: 'object',
@@ -945,13 +964,16 @@ const LIVE_KB_TOOL = {
 function buildLiveSetup(stage) {
   // Fokozatosan egyszerűsített setup: ha a szerver elutasít egy mezőt (1011),
   // a következő szinten kevesebb opcionális funkcióval próbálkozunk újra.
-  const model = stage >= 4 ? 'gemini-3.1-flash-live-preview' : LIVE_MODEL;
+  const model = stage >= 4 ? 'gemini-3.8-live' : LIVE_MODEL;
+  const thinkingCfg = model === LIVE_MODEL ? { thinkingLevel: liveThinkingLevel } : null;
   if (stage >= 3) {
-    return { setup: {
+    const setup = {
       model: 'models/' + model,
-      responseModalities: ['AUDIO'],
+      generationConfig: { responseModalities: ['AUDIO'] },
       systemInstruction: { parts: [{ text: liveSystemPrompt() }] }
-    } };
+    };
+    if (thinkingCfg) setup.generationConfig.thinkingConfig = thinkingCfg;
+    return { setup: setup };
   }
   const s = {
     model: 'models/' + model,
@@ -964,6 +986,7 @@ function buildLiveSetup(stage) {
     outputAudioTranscription: {},
     tools: []
   };
+  if (thinkingCfg) s.generationConfig.thinkingConfig = thinkingCfg;
   if (stage < 2) {
     s.generationConfig.speechConfig.languageCode = 'hu-HU';
     s.contextWindowCompression = { slidingWindow: {} };
@@ -981,6 +1004,8 @@ const LIVE_PROMPT = 'Te egy magyarul beszélő, közvetlen hangvételű AI asszi
 '- Csevegéshez nem kell keresés. Friss, napi információért (árak, hírek, aktuális adatok) a Google keresést használd. Weboldal tartalmára kíváncsi felhasználónál a `read_webpage` függvényt hívd.\n' +
 '- A felhasználó képet is küldhet neked (pl. címke, dokumentum, alkatrész); ha képet kapsz, mondd el, amit látsz.\n' +
 '- Szakemberrel beszélsz: ne magyarázd az alapokat, és ne háríts "bízd szakemberre" jellegű kitételekkel. Csak valóban biztonságkritikus dolgoknál (pl. ammónia, gyúlékony hűtőközeg, nyomás alatt álló rendszer) tegyél egy rövid biztonsági megjegyzést.\n' +
+'- A felhasználó MAGYARUL beszél. A hallott beszédet mindig magyarként értelmezd, és KIZÁRÓLAG magyarul válaszolj – akkor is, ha egy-egy szó idegen nyelvűnek hangzik.\n' +
+'- Ha keresel vagy weboldalt olvasol, közben mondhatsz egy rövid jelzést (pl. "megnézem a tudásbázisban"), de a végleges választ csak az eredmény alapján add meg.\n' +
 '- Rövid, természetes, kimondásra alkalmas válaszokat adj – ne sorolj fel hosszú listákat.';
 // A promptba kerülő aktuális témalista (a connectLive frissíti a kbTopics tömböt)
 function liveSystemPrompt() {
@@ -1200,6 +1225,7 @@ async function connectLive() {
       return;
     }
     console.log('[LIVE] <<', msg);
+    const iStatus = msg.interactionStatus || (msg.serverContent && msg.serverContent.interactionStatus) || null;
     if (msg.error) { showToast('Live API hiba: ' + (msg.error.message || 'ismeretlen')); return; }
     if (msg.usageMetadata) trackLiveUsage(msg.usageMetadata);
     if (msg.setupComplete) {
@@ -1216,9 +1242,16 @@ async function connectLive() {
       return;
     }
     if (msg.goAway) { setLiveStatus('Kapcsolat frissítése...', 'thinking'); return; }
-    if (msg.toolCall) { await handleLiveToolCall(msg.toolCall); return; }
+    if (msg.toolCall) {
+      setLiveStatus('Keresek...', 'thinking');
+      await handleLiveToolCall(msg.toolCall);
+      return;
+    }
     const sc = msg.serverContent;
-    if (!sc) return;
+    if (!sc) {
+      if (iStatus === 'IN_PROGRESS') setLiveStatus('Gondolkodik...', 'thinking');
+      return;
+    }
     if (sc.interrupted) {
       stopPlayback();
       liveAiText = (liveAiText + ' (félbeszakítva)').trim();
@@ -1248,6 +1281,13 @@ async function connectLive() {
       updateLiveAiBubble();
     }
     if (sc.turnComplete) {
+      if (iStatus === 'IN_PROGRESS') {
+        // Közbenső forduló (extended thinking / non-blocking tool): a szöveget megtartjuk
+        if (liveAiText && !/\s$/.test(liveAiText)) liveAiText += ' ';
+        setLiveStatus('Gondolkodik...', 'thinking');
+        flushMicBuffer();
+        return;
+      }
       if (liveUserText.trim()) chatHistory.push({ role: 'user', parts: [{ text: liveUserText.trim() }] });
       if (liveAiText.trim()) chatHistory.push({ role: 'model', parts: [{ text: liveAiText.trim() }] });
       liveUserText = ''; liveAiText = ''; liveUserBubble = null; liveAiBubble = null;

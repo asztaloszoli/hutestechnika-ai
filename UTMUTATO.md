@@ -278,6 +278,8 @@ Téma nélkül minden feltöltés az `általános` címkét kapja. Az admin olda
 
 > **Ha már korábban beállítottad a Supabase-et:** egyszer futtasd le a `supabase_migracio_topic.sql` fájlt az SQL Editorban (teljes tartalmát bemásolod → Run). Ez létrehozza a `topic` oszlopot és az új keresőfüggvényt, és a régi dokumentumok a `hűtéstechnika` címkét kapják.
 
+> **Supabase változás 2026. október 30-tól:** az új táblák nem kapnak automatikusan hozzáférést a Data API-hoz. A `supabase_setup.sql` már tartalmazza a szükséges `grant` sorokat, így új projektnél elég azt lefuttatni. Meglévő, működő projektnél nincs teendő (de a fájl ott is biztonságosan újrafuttatható).
+
 ---
 
 ## 6. AZ AI ASSZISZTENS HASZNÁLATA
