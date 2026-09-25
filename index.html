@@ -504,7 +504,40 @@ body.standalone #usage-text { font-size: calc(13px * var(--pwa-scale)) !importan
       <option value="MEDIUM">közepes</option>
       <option value="HIGH">magas (lassabb, okosabb)</option>
     </select>
-    <div class="settings-note">A következő élő kapcsolatnál lép életbe.</div>
+    <label>Élő mód hangja</label>
+    <select id="settings-live-voice" onchange="saveLiveVoice()">
+      <option value="Zubenelgenubi">Zubenelgenubi (laza, hétköznapi)</option>
+      <option value="Callirrhoe">Callirrhoe (könnyed)</option>
+      <option value="Umbriel">Umbriel (laza)</option>
+      <option value="Achird">Achird (barátságos)</option>
+      <option value="Sulafat">Sulafat (meleg)</option>
+      <option value="Schedar">Schedar (kiegyensúlyozott)</option>
+      <option value="Achernar">Achernar (lágy)</option>
+      <option value="Vindemiatrix">Vindemiatrix (gyengéd)</option>
+      <option value="Iapetus">Iapetus (tiszta)</option>
+      <option value="Charon">Charon (tájékoztató)</option>
+      <option value="Kore">Kore (határozott női)</option>
+      <option value="Orus">Orus (határozott)</option>
+      <option value="Zephyr">Zephyr (fényes)</option>
+      <option value="Leda">Leda (fiatalos)</option>
+      <option value="Fenrir">Fenrir (lelkes)</option>
+      <option value="Gacrux">Gacrux (érett)</option>
+      <option value="Puck">Puck (vidám – korábbi alap)</option>
+      <option value="Laomedeia">Laomedeia (vidám)</option>
+      <option value="Sadachbia">Sadachbia (élénk)</option>
+      <option value="Aoede">Aoede (szellős)</option>
+      <option value="Autonoe">Autonoe (fényes)</option>
+      <option value="Erinome">Erinome (tiszta)</option>
+      <option value="Algieba">Algieba (sima)</option>
+      <option value="Despina">Despina (sima)</option>
+      <option value="Enceladus">Enceladus (lihegős)</option>
+      <option value="Algenib">Algenib (rekedtes)</option>
+      <option value="Rasalgethi">Rasalgethi (tájékoztató)</option>
+      <option value="Sadaltager">Sadaltager (hozzáértő)</option>
+      <option value="Alnilam">Alnilam (határozott)</option>
+      <option value="Pulcherrima">Pulcherrima (energikus)</option>
+    </select>
+    <div class="settings-note">A következő élő kapcsolatnál lép életbe. Próbálgasd, melyik tetszik.</div>
   </div>
 
   <div class="settings-group">
@@ -632,6 +665,7 @@ let sbUrl = localStorage.getItem('hutestech_sb_url') || '';
 let sbKey = localStorage.getItem('hutestech_sb_key') || '';
 let selectedModel = localStorage.getItem('hutestech_model') || 'gemini-3.5-flash';
 let liveThinkingLevel = localStorage.getItem('hutestech_live_thinking') || 'LOW';
+let liveVoice = localStorage.getItem('hutestech_live_voice') || 'Zubenelgenubi';
 let lastSearchMethod = 'none';
 let kbTopics = [];                                    // a tudásbázisban lévő témák (distinct topic)
 let selectedTopic = localStorage.getItem('hutestech_topic') || ''; // '' = minden téma
@@ -656,6 +690,8 @@ window.onload = function() {
   if (modelSel) modelSel.value = selectedModel;
   const thinkSel = document.getElementById('settings-live-thinking');
   if (thinkSel) thinkSel.value = liveThinkingLevel;
+  const voiceSel = document.getElementById('settings-live-voice');
+  if (voiceSel) voiceSel.value = liveVoice;
 
   const budgEl = document.getElementById('settings-budget');
   if (budgEl) budgEl.value = monthlyBudget;
@@ -677,6 +713,12 @@ function saveLiveThinking() {
   liveThinkingLevel = document.getElementById('settings-live-thinking').value;
   localStorage.setItem('hutestech_live_thinking', liveThinkingLevel);
   showToast('Élő mód gondolkodás mentve: ' + liveThinkingLevel);
+}
+
+function saveLiveVoice() {
+  liveVoice = document.getElementById('settings-live-voice').value;
+  localStorage.setItem('hutestech_live_voice', liveVoice);
+  showToast('Élő mód hangja mentve: ' + liveVoice);
 }
 
 function saveApiKey() {
@@ -990,7 +1032,7 @@ function buildLiveSetup(stage) {
     model: 'models/' + model,
     generationConfig: {
       responseModalities: ['AUDIO'],
-      speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Puck' } } }
+      speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: liveVoice } } }
     },
     systemInstruction: { parts: [{ text: liveSystemPrompt() }] },
     inputAudioTranscription: {},
