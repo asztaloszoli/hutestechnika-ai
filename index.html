@@ -127,6 +127,18 @@ body {
   white-space: pre-wrap;
   display: none;
 }
+.live-thought {
+  margin: 4px 0 8px;
+  padding: 6px 10px;
+  background: #0f172a;
+  border-left: 2px solid #334155;
+  border-radius: 4px;
+  font-size: 0.85em;
+  color: #94a3b8;
+  font-style: italic;
+}
+.live-thought summary { cursor: pointer; font-style: normal; color: #64748b; font-size: 13px; }
+.live-thought-body { margin-top: 4px; white-space: pre-wrap; }
 #quick-btns {
   padding: 6px 10px;
   display: flex;
@@ -983,6 +995,8 @@ let micStream = null, micCtx = null, micWorklet = null;
 let playCtx = null, playTime = 0, playSources = [];
 let liveResumeHandle = null, liveResumeHandleNew = null;
 let liveUserBubble = null, liveAiBubble = null, liveAiText = '', liveUserText = '';
+let liveThoughtBuf = '';                // az aktuális forduló gondolat-szövege (thought parts)
+let liveWakeLock = null;                // képernyő ébrentartása élő mód közben
 let liveUsedKb = false;                 // az aktuális fordulóban hívta-e a tudásbázist
 let liveMicChunks = [];
 let liveUsagePrev = null;
@@ -1018,7 +1032,7 @@ function buildLiveSetup(stage) {
   // Fokozatosan egyszerűsített setup: ha a szerver elutasít egy mezőt (1011),
   // a következő szinten kevesebb opcionális funkcióval próbálkozunk újra.
   const model = stage >= 4 ? 'gemini-3.8-live' : LIVE_MODEL;
-  const thinkingCfg = model === LIVE_MODEL ? { thinkingLevel: liveThinkingLevel } : null;
+  const thinkingCfg = model === LIVE_MODEL ? { thinkingLevel: liveThinkingLevel, includeThoughts: true } : null;
   if (stage >= 3) {
     const setup = {
       model: 'models/' + model,
@@ -1044,6 +1058,8 @@ function buildLiveSetup(stage) {
     s.generationConfig.speechConfig.languageCode = 'hu-HU';
     s.contextWindowCompression = { slidingWindow: {} };
     s.sessionResumption = liveResumeHandle ? { handle: liveResumeHandle } : {};
+    s.enableAffectiveDialog = true;
+    s.realtimeInputConfig = { automaticActivityDetection: { endOfSpeechSensitivity: 'END_SENSITIVITY_LOW', prefixPaddingMs: 200, silenceDurationMs: 900 } };
   }
   if (stage === 0) s.tools.push({ googleSearch: {} });
   s.tools.push(LIVE_KB_TOOL);
@@ -1263,7 +1279,7 @@ async function connectLive() {
     const setup = buildLiveSetup(liveSetupStage);
     console.log('[LIVE] ws nyitva, setup küldése (szint ' + liveSetupStage + '):', setup);
     liveWs.send(JSON.stringify(setup));
-    liveUserText = ''; liveAiText = '';
+    liveUserText = ''; liveAiText = ''; liveThoughtBuf = '';
     liveUserBubble = null; liveAiBubble = null;
   };
   liveWs.onmessage = async e => {
@@ -1287,6 +1303,13 @@ async function connectLive() {
       if (liveSetupTimer) { clearTimeout(liveSetupTimer); liveSetupTimer = null; }
       console.log('[LIVE] setupComplete – kapcsolat kész (szint ' + liveSetupStage + ')');
       setLiveStatus('Hallak...', 'listening');
+      requestLiveWakeLock();
+      if ('mediaSession' in navigator) {
+        try {
+          navigator.mediaSession.metadata = new MediaMetadata({ title: 'Élő beszélgetés', artist: 'Hűtéstechnika AI' });
+          navigator.mediaSession.playbackState = 'playing';
+        } catch(e) {}
+      }
       startMicCapture().then(ok => { if (!ok) stopLive(); });
       return;
     }
@@ -1308,7 +1331,7 @@ async function connectLive() {
     if (sc.interrupted) {
       stopPlayback();
       liveAiText = (liveAiText + ' (félbeszakítva)').trim();
-      if (liveAiBubble) liveAiBubble.textContent = '🤖 ' + liveAiText;
+      updateLiveAiBubble();
       setLiveStatus('Hallak...', 'listening');
       return;
     }
@@ -1325,9 +1348,10 @@ async function connectLive() {
           console.log('[LIVE] audio:', part.inlineData.mimeType);
           playPCM(part.inlineData.data, rm ? parseInt(rm[1]) : 24000);
         }
-        if (part.text) liveAiText += part.text;
+        if (part.thought && part.text) liveThoughtBuf += part.text;
+        else if (part.text) liveAiText += part.text;
       }
-      if (liveAiText) updateLiveAiBubble();
+      if (liveAiText || liveThoughtBuf) updateLiveAiBubble();
     }
     if (sc.outputTranscription && sc.outputTranscription.text) {
       liveAiText += sc.outputTranscription.text;
@@ -1344,6 +1368,7 @@ async function connectLive() {
       if (liveUserText.trim()) chatHistory.push({ role: 'user', parts: [{ text: liveUserText.trim() }] });
       if (liveAiText.trim()) chatHistory.push({ role: 'model', parts: [{ text: liveAiText.trim() }] });
       liveUserText = ''; liveAiText = ''; liveUserBubble = null; liveAiBubble = null;
+      liveThoughtBuf = '';
       liveUsedKb = false;
       if (playSources.length === 0) setLiveStatus('Hallak...', 'listening');
       flushMicBuffer();
@@ -1376,12 +1401,20 @@ async function connectLive() {
     setTimeout(connectLive, 1500);
   };
 }
+function liveThoughtHtml() {
+  if (!liveThoughtBuf.trim()) return '';
+  const esc = liveThoughtBuf.trim()
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/\n/g, '<br>');
+  return '<details class="live-thought"><summary>Gondolkodás</summary><div class="live-thought-body">' + esc + '</div></details>';
+}
 function updateLiveAiBubble() {
   const badge = liveUsedKb
     ? '<div class="source-badge kb">📚 tudásbázis</div>'
     : '<div class="source-badge general">🎙️ élő</div>';
-  if (!liveAiBubble) liveAiBubble = addMsg('🤖 ' + liveAiText.trim(), 'ai');
-  else liveAiBubble.innerHTML = badge + '<div>' + formatAI(liveAiText.trim()) + '</div>';
+  const html = badge + liveThoughtHtml() + '<div>' + formatAI(liveAiText.trim()) + '</div>';
+  if (!liveAiBubble) liveAiBubble = addMsg('', 'ai');
+  liveAiBubble.innerHTML = html;
 }
 function trackLiveUsage(u) {
   const curIn = u.promptTokenCount || 0;
@@ -1508,9 +1541,14 @@ function stopLiveUI() {
   stopLiveCam();
   stopPlayback();
   if (playCtx) { try { playCtx.close(); } catch(e){} playCtx = null; playTime = 0; }
+  if (liveWakeLock) { try { liveWakeLock.release().catch(() => {}); } catch(e) {} liveWakeLock = null; }
+  if ('mediaSession' in navigator) {
+    try { navigator.mediaSession.playbackState = 'none'; navigator.mediaSession.metadata = null; } catch(e) {}
+  }
   liveActive = false; liveReconnecting = false;
   liveSetupDone = false;
   liveUserText = ''; liveAiText = ''; liveUserBubble = null; liveAiBubble = null;
+  liveThoughtBuf = '';
 }
 function stopLive() {
   liveActive = false;
@@ -1519,6 +1557,13 @@ function stopLive() {
   if (liveResumeHandleNew) liveResumeHandle = liveResumeHandleNew;
   stopLiveUI();
 }
+async function requestLiveWakeLock() {
+  try { liveWakeLock = await navigator.wakeLock.request('screen'); } catch(e) {}
+}
+// Ha az appot előtérbe hozzák élő mód közben, a böngésző eldobhatta a wake lockot – újrakérjük
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && liveActive) requestLiveWakeLock();
+});
 function toggleLive() {
   if (liveActive) { stopLive(); return; }
   if (budgetExceeded()) { showToast('A havi AI költségkeret elfogyott'); return; }
