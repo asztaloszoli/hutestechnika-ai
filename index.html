@@ -1059,7 +1059,7 @@ function buildLiveSetup(stage) {
     s.contextWindowCompression = { slidingWindow: {} };
     s.sessionResumption = liveResumeHandle ? { handle: liveResumeHandle } : {};
     s.enableAffectiveDialog = true;
-    s.realtimeInputConfig = { automaticActivityDetection: { endOfSpeechSensitivity: 'END_SENSITIVITY_LOW', prefixPaddingMs: 200, silenceDurationMs: 900 } };
+    s.realtimeInputConfig = { automaticActivityDetection: { startOfSpeechSensitivity: 'START_SENSITIVITY_LOW', endOfSpeechSensitivity: 'END_SENSITIVITY_LOW', prefixPaddingMs: 200, silenceDurationMs: 900 } };
   }
   if (stage === 0) s.tools.push({ googleSearch: {} });
   s.tools.push(LIVE_KB_TOOL);
